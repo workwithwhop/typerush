@@ -2,7 +2,7 @@
 
 ## 🚨 **The Real Issue**
 
-Looking at the Whop documentation, we're still using the wrong approach! According to the docs, we should be using the **iframe SDK** for in-app purchases, not creating access passes manually.
+Looking at tASDSAD Whop documentation, we're still using the wrong approach! According to the docs, we should be using the **iframe SDK** for in-app purchases, not creating access passes manually.
 
 ## ✅ **Correct Approach from Whop Docs**
 
