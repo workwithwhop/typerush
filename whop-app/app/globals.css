@@ -1,0 +1,310 @@
+@layer theme, base, frosted_ui, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "@whop/react/styles.css" layer(frosted_ui);
+
+@config '../tailwind.config.ts';
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 142.1 76.2% 36.3%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 210 40% 98%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 98%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 98%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 142.1 76.2% 36.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Premium Dark Theme with Stunning Purple-Pink Gradient */
+    --background: 0 0% 10%; /* #1a1a1a - Deep dark base */
+    --foreground: 0 0% 98%; /* Crisp white text */
+    --card: 0 0% 12%; /* #1f1f1f - Elevated cards */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 280 85% 62%; /* Electric purple - stunning main color */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 265 75% 55%; /* Deep violet secondary */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 70%;
+    --accent: 290 90% 68%; /* Bright magenta accent - eye-catching */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%; /* Slightly lighter border for depth */
+    --input: 0 0% 14%;
+    --ring: 285 88% 65%; /* Vibrant purple-pink ring */
+  }
+}
+
+html, body {
+	background: #1a1a1a !important; /* Exact Radix dark-2 color from images - prevents FOUC */
+}
+
+/* Prevent FOUC for all elements */
+*, *::before, *::after {
+	background-color: inherit;
+	color: inherit;
+}
+
+/* Ensure all common elements have proper colors immediately */
+div, section, article, main, header, footer, nav, aside {
+	background-color: transparent;
+	color: #ffffff;
+}
+
+/* Prevent button flash */
+button {
+	background-color: transparent;
+	color: #ffffff;
+}
+
+/* Prevent input flash */
+input, textarea, select {
+	background-color: #1f1f1f;
+	color: #ffffff;
+	border-color: #2e2e2e;
+}
+
+/* Prevent card flash */
+.card, [class*="card"] {
+	background-color: #1f1f1f;
+	color: #ffffff;
+}
+
+/* Prevent text flash */
+h1, h2, h3, h4, h5, h6, p, span, a, li {
+	color: #ffffff;
+}
+
+body {
+	color: var(--foreground);
+	font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	-webkit-tap-highlight-color: transparent;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+	body {
+		-webkit-text-size-adjust: 100%;
+		-ms-text-size-adjust: 100%;
+	}
+	
+	/* Prevent zoom on input focus */
+	input[type="text"] {
+		font-size: 16px !important;
+	}
+	
+	/* Touch-friendly interactions */
+	button, input, [role="button"] {
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
+	}
+	
+	/* Safe area support for mobile devices */
+	.safe-area-bottom {
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+	
+	.safe-area-top {
+		padding-top: env(safe-area-inset-top);
+	}
+	
+	.safe-area-left {
+		padding-left: env(safe-area-inset-left);
+	}
+	
+	.safe-area-right {
+		padding-right: env(safe-area-inset-right);
+	}
+}
+
+/* Force web layout on Whop platform */
+@media (min-width: 768px) {
+	/* Override any potential Whop platform width constraints */
+	body, html {
+		width: 100% !important;
+		max-width: none !important;
+	}
+	
+	/* Force web layout classes to activate at smaller breakpoint */
+	.lg\:flex-row {
+		flex-direction: row !important;
+	}
+	
+	.lg\:w-1\/2 {
+		width: 50% !important;
+	}
+	
+	.lg\:max-w-6xl {
+		max-width: 72rem !important;
+	}
+	
+	.lg\:gap-12 {
+		gap: 3rem !important;
+	}
+	
+	.lg\:py-8 {
+		padding-top: 2rem !important;
+		padding-bottom: 2rem !important;
+	}
+	
+	/* Force all lg: classes to activate */
+	.lg\:rounded-3xl {
+		border-radius: 1.5rem !important;
+	}
+	
+	.lg\:p-6 {
+		padding: 1.5rem !important;
+	}
+	
+	.lg\:p-4 {
+		padding: 1rem !important;
+	}
+	
+	.lg\:mb-6 {
+		margin-bottom: 1.5rem !important;
+	}
+	
+	.lg\:mb-4 {
+		margin-bottom: 1rem !important;
+	}
+	
+	.lg\:mt-6 {
+		margin-top: 1.5rem !important;
+	}
+	
+	.lg\:mt-4 {
+		margin-top: 1rem !important;
+	}
+	
+	.lg\:gap-3 {
+		gap: 0.75rem !important;
+	}
+	
+	.lg\:gap-2 {
+		gap: 0.5rem !important;
+	}
+	
+	.lg\:space-y-4 > * + * {
+		margin-top: 1rem !important;
+	}
+	
+	.lg\:space-y-3 > * + * {
+		margin-top: 0.75rem !important;
+	}
+	
+	.lg\:h-32 {
+		height: 8rem !important;
+	}
+	
+	.lg\:w-12 {
+		width: 3rem !important;
+	}
+	
+	.lg\:h-12 {
+		height: 3rem !important;
+	}
+	
+	.lg\:w-6 {
+		width: 1.5rem !important;
+	}
+	
+	.lg\:h-6 {
+		height: 1.5rem !important;
+	}
+	
+	.lg\:w-5 {
+		width: 1.25rem !important;
+	}
+	
+	.lg\:h-5 {
+		height: 1.25rem !important;
+	}
+	
+	.lg\:w-4 {
+		width: 1rem !important;
+	}
+	
+	.lg\:h-4 {
+		height: 1rem !important;
+	}
+	
+	.lg\:text-lg {
+		font-size: 1.125rem !important;
+		line-height: 1.75rem !important;
+	}
+	
+	.lg\:text-base {
+		font-size: 1rem !important;
+		line-height: 1.5rem !important;
+	}
+	
+	.lg\:text-xl {
+		font-size: 1.25rem !important;
+		line-height: 1.75rem !important;
+	}
+	
+	.lg\:text-sm {
+		font-size: 0.875rem !important;
+		line-height: 1.25rem !important;
+	}
+	
+	.lg\:px-8 {
+		padding-left: 2rem !important;
+		padding-right: 2rem !important;
+	}
+	
+	.lg\:py-4 {
+		padding-top: 1rem !important;
+		padding-bottom: 1rem !important;
+	}
+	
+	.lg\:py-2 {
+		padding-top: 0.5rem !important;
+		padding-bottom: 0.5rem !important;
+	}
+	
+	.lg\:px-4 {
+		padding-left: 1rem !important;
+		padding-right: 1rem !important;
+	}
+	
+	.lg\:rounded-xl {
+		border-radius: 0.75rem !important;
+	}
+	
+	.lg\:rounded-2xl {
+		border-radius: 1rem !important;
+	}
+	
+	.lg\:items-start {
+		align-items: flex-start !important;
+	}
+}
