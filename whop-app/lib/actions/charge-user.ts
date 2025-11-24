@@ -17,7 +17,7 @@ export async function createCheckoutConfig(hearts: number = 1) {
     const result = await whopSdk.checkoutConfigurations.create({
       plan: {
         company_id: process.env.NEXT_PUBLIC_WHOP_COMPANY_ID!,
-        initial_price: 0, // TESTING: Set to 0 for testing. Change back to totalPrice for production
+        initial_price: totalPrice, // TESTING: Set to 0 for testing. Change back to totalPrice for production
         plan_type: "one_time",
         currency: "usd",
       },
