@@ -242,6 +242,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
         // If user just purchased extra lives and game is over, continue game from where it ended
         if (gameState === 'gameover' && spendingStats.current_lives > 0) {
           setShowAdModal(false);
+          setIsNewGame(false);
           setGameState('playing');
           livesRef.current = spendingStats.current_lives;
           setLives(spendingStats.current_lives);
@@ -781,7 +782,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
         {/* Simplified background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 left-10 w-60 h-60 bg-gradient-to-br from-primary/8 to-primary/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-emerald-500/6 to-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-accent/10 to-primary/5 rounded-full blur-3xl" />
         </div>
 
         {/* User Profile Card - Only show in menu */}
@@ -789,7 +790,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           <Card className="max-w-sm sm:max-w-md w-full bg-slate-800/95 backdrop-blur-xl border-slate-700/50 shadow-2xl mx-2 mb-4">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary to-emerald-500 rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-lg">{user.name.charAt(0).toUpperCase()}</span>
                 </div>
                 <div className="flex-1">
@@ -815,7 +816,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
                 <Sparkles className="mx-auto text-primary drop-shadow-lg" size={40} />
               </div>
             </div>
-            <CardTitle className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-emerald-400 to-primary mb-3 sm:mb-4 tracking-tight drop-shadow-lg">
+            <CardTitle className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-primary mb-3 sm:mb-4 tracking-tight drop-shadow-lg">
               TYPE RUSH
             </CardTitle>
             <CardDescription className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-slate-300 text-sm sm:text-base md:text-xl font-semibold">
@@ -842,7 +843,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
               onClick={startGame}
               disabled={!playerName.trim()}
               size="lg"
-              className="w-full text-lg sm:text-xl md:text-2xl font-black h-14 sm:h-16 md:h-18 touch-manipulation bg-gradient-to-r from-primary to-emerald-500 hover:from-primary/90 hover:to-emerald-500/90 border-0 shadow-xl hover:shadow-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full text-lg sm:text-xl md:text-2xl font-black h-14 sm:h-16 md:h-18 touch-manipulation bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 border-0 shadow-xl hover:shadow-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Zap size={22} className="mr-3" />
               START GAME
@@ -898,7 +899,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
                             )}
                           </div>
                         </div>
-                        <span className="font-black text-xl sm:text-2xl md:text-3xl text-transparent bg-clip-text bg-gradient-to-r from-primary to-emerald-400">{entry.score}</span>
+                        <span className="font-black text-xl sm:text-2xl md:text-3xl text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">{entry.score}</span>
                       </div>
                     ))}
                   </div>
@@ -907,7 +908,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
             )}
 
             <div className="text-center">
-              <div className="inline-flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-primary/20 to-emerald-500/20 px-4 sm:px-6 py-3 sm:py-4 rounded-full border border-primary/30 shadow-lg">
+              <div className="inline-flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-primary/20 to-accent/20 px-4 sm:px-6 py-3 sm:py-4 rounded-full border border-primary/30 shadow-lg">
                 <Star size={14} className="text-amber-300" />
                 <p className="text-slate-200 text-sm sm:text-base font-bold">Build combos for bonus points</p>
                 <Star size={14} className="text-amber-300" />
@@ -1012,7 +1013,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
       {/* Simplified background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-60 h-60 bg-gradient-to-br from-primary/8 to-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-emerald-500/6 to-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-accent/10 to-primary/5 rounded-full blur-3xl" />
       </div>
 
       {/* Mobile-Optimized Game Header */}

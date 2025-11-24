@@ -32,7 +32,7 @@ export function Toast({
   const getTypeStyles = () => {
     switch (type) {
       case "success":
-        return "bg-gradient-to-r from-emerald-500/90 to-green-500/90 border-emerald-400/50 text-white";
+        return "bg-gradient-to-r from-primary/90 to-accent/90 border-primary/50 text-white";
       case "error":
         return "bg-gradient-to-r from-red-500/90 to-rose-500/90 border-red-400/50 text-white";
       case "warning":

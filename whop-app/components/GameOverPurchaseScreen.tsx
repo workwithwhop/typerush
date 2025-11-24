@@ -138,7 +138,7 @@ export default function GameOverPurchaseScreen({
             <h2 className="text-2xl font-black text-white mb-1">Game Over!</h2>
             <p className="text-slate-400 text-xs">Score: <span className="text-primary font-bold text-lg">{currentScore}</span></p>
             {currentScore > bestScore && (
-              <p className="text-emerald-400 text-xs font-bold">🎉 New Best!</p>
+              <p className="text-accent text-xs font-bold">🎉 New Best!</p>
             )}
           </div>
         ) : (

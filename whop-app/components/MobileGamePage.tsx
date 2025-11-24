@@ -298,7 +298,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
       {/* Mobile Game Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-60 h-60 bg-gradient-to-br from-primary/15 to-primary/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-emerald-500/10 to-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-accent/15 to-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
       {/* Header - Enhanced */}
@@ -422,7 +422,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
           <div className="text-center mb-3 lg:mb-6">
             <Button 
               size="lg" 
-              className="bg-gradient-to-r from-primary to-emerald-500 hover:from-primary/90 hover:to-emerald-500/90 text-white font-black px-6 lg:px-8 py-2 lg:py-4 text-base lg:text-lg rounded-2xl shadow-2xl hover:shadow-primary/25 transition-all duration-300 transform hover:scale-105 w-full"
+              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white font-black px-6 lg:px-8 py-2 lg:py-4 text-base lg:text-lg rounded-2xl shadow-2xl hover:shadow-primary/25 transition-all duration-300 transform hover:scale-105 w-full"
               onClick={() => setShowGame(true)}
             >
               <Play className="w-5 h-5 lg:w-6 lg:h-6 mr-2" />

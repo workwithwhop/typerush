@@ -60,7 +60,7 @@ export default function LeaderboardScreen({ leaderboard, userRank, onBack }: Lea
       {/* Mobile Game Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-60 h-60 bg-gradient-to-br from-primary/15 to-primary/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-emerald-500/10 to-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-accent/15 to-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
       {/* Fixed Header */}
@@ -101,7 +101,7 @@ export default function LeaderboardScreen({ leaderboard, userRank, onBack }: Lea
                 <div className="w-10 h-10 flex items-center justify-center">
                   {getRankIcon(player.rank)}
                 </div>
-                <div className="w-10 h-10 bg-gradient-to-br from-primary to-emerald-500 rounded-full flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">{player.avatar}</span>
                 </div>
                 <div>
