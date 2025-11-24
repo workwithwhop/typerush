@@ -182,7 +182,8 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   const { toasts, removeToast, showError, showSuccess } = useToast();
 
   const [inputValue, setInputValue] = useState('');
-  const [gameState, setGameState] = useState('playing');
+  type GameState = 'playing' | 'gameover' | 'menu';
+  const [gameState, setGameState] = useState<GameState>('playing');
   const [highScore, setHighScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [playerName, setPlayerName] = useState(user?.name || 'Player');
@@ -246,7 +247,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           setLives(spendingStats.current_lives);
           
           // Resume the game loop if not already running
-          if (!gameLoopRef.current && gameState === 'playing') {
+          if (!gameLoopRef.current) {
             // Game loop will be started by useEffect
           }
           
