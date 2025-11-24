@@ -10,15 +10,46 @@ export default async function Page() {
 		// Try to get user info from headers
 		const headersList = await headers();
 		const { userId } = await whopApiSdk.verifyUserToken(headersList);
-		
-		// Use simple user data (full user details not needed for game)
-		const user = {
-			name: "Player",
-			username: "player",
-		};
-		
+
+		let whopUser: any = null;
+		try {
+			whopUser = await whopApiSdk.users.getUser({ userId });
+		} catch (userError) {
+			console.warn("Unable to fetch Whop user profile:", userError);
+		}
+
+		const displayName =
+			whopUser?.name ||
+			whopUser?.display_name ||
+			whopUser?.username ||
+			"Player";
+
+		const usernameBase =
+			whopUser?.username ||
+			whopUser?.handle ||
+			whopUser?.name ||
+			`player`;
+
+		const normalizedBase =
+			usernameBase
+				.toString()
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, "-")
+				.replace(/^-+|-+$/g, "") || "player";
+
+		const uniqueSuffix =
+			typeof userId === "string" && userId.length >= 4
+				? userId.slice(-6)
+				: "guest";
+
+		const uniqueUsername = `${normalizedBase}-${uniqueSuffix}`;
+
 		// If we have a user, show the mobile game app interface
-		return <MobileGamePage user={{ name: user.name, username: user.username, id: userId }} />;
+		return (
+			<MobileGamePage
+				user={{ name: displayName, username: uniqueUsername, id: userId }}
+			/>
+		);
 	} catch (error) {
 		// Silently handle the error - this is expected when not in Whop iframe
 		// Only log in development
