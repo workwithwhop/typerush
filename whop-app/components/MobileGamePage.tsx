@@ -12,11 +12,13 @@ import {
   Medal,
   Award,
   ArrowRight,
-  User,
-  Star
+  Info,
+  Star,
+  Heart
 } from "lucide-react";
 import LeaderboardScreen from "./LeaderboardModal";
 import BubbleTypeGame from "./BubbleTypeGame";
+import GameOverPurchaseScreen from "./GameOverPurchaseScreen";
 import { 
   createOrUpdateUser, 
   getUser, 
@@ -48,16 +50,18 @@ interface MobileGamePageProps {
 export default function MobileGamePage({ user }: MobileGamePageProps) {
   
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [showGame, setShowGame] = useState(false);
-  const [userLives, setUserLives] = useState(3); // Track user's lives count
+  const [showHeartsPurchase, setShowHeartsPurchase] = useState(false);
+  const [userLives, setUserLives] = useState(0); // Track user's extra lives count (starts at 0)
   const [userSpendingStats, setUserSpendingStats] = useState<any>(null); // Track detailed spending statistics
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [topSpender, setTopSpender] = useState<TopSpender | null>(null);
   const [userPayments, setUserPayments] = useState<any[]>([]);
   const [userPurchases, setUserPurchases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const profileRef = useRef<HTMLDivElement>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const infoPanelRef = useRef<HTMLDivElement>(null);
   const loadDataTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const realtimeChannelsRef = useRef<any[]>([]);
 
@@ -70,9 +74,9 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
       const connectionTest = await testDatabaseConnection();
       
       // Create or update user in database (only if needed)
-      if (user.username) {
+      if (user.id) {
         const userResult = await createOrUpdateUser({
-          id: user.username, // Using username as ID for simplicity
+          id: user.id, // Use Whop user ID
           username: user.username,
           name: user.name || user.username
         });
@@ -80,10 +84,10 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
 
       // Load data in parallel for better performance
       const [leaderboardData, topSpenderData, userData, spendingStats] = await Promise.all([
-        getLeaderboard(10),
+        getLeaderboard(10, user.id), // Pass user.id to ensure user is included
         getTopSpender(),
-        user.username ? getUser(user.username) : Promise.resolve(null),
-        user.username ? getUserSpendingStats(user.username) : Promise.resolve(null)
+        user.id ? getUser(user.id) : Promise.resolve(null),
+        user.id ? getUserSpendingStats(user.id) : Promise.resolve(null)
       ]);
 
       // Update state with fetched data
@@ -91,11 +95,19 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
       setTopSpender(topSpenderData);
       
       if (userData) {
-        setUserLives(userData.lives); // Using lives field
+        // Use lives from database, default to 0 if null/undefined
+        const livesValue = userData.lives !== null && userData.lives !== undefined ? userData.lives : 0;
+        setUserLives(livesValue);
+        console.log("Loaded user lives from database:", livesValue);
       }
       
       if (spendingStats) {
         setUserSpendingStats(spendingStats);
+        // Also update lives from spending stats if available
+        if (spendingStats.current_lives !== undefined && spendingStats.current_lives !== null) {
+          setUserLives(spendingStats.current_lives);
+          console.log("Loaded lives from spending stats:", spendingStats.current_lives);
+        }
       }
     } catch (error) {
       // Error loading data
@@ -116,7 +128,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
 
   // Setup real-time subscriptions
   const setupRealtimeSubscriptions = () => {
-    if (!user.username) return;
+    if (!user.id) return;
 
     // Clear existing subscriptions
     realtimeChannelsRef.current.forEach(channel => {
@@ -125,13 +137,28 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
     realtimeChannelsRef.current = [];
 
     // Subscribe to user data changes
-    const userChannel = subscribeToUserChanges(user.username, (updatedUser) => {
-      setUserLives(updatedUser.lives); // Using lives field
+    const userChannel = subscribeToUserChanges(user.id, (updatedUser) => {
+      console.log("User data updated via realtime:", updatedUser);
+      if (updatedUser.lives !== undefined && updatedUser.lives !== null) {
+        setUserLives(updatedUser.lives);
+        console.log("Extra lives updated to:", updatedUser.lives);
+      } else {
+        setUserLives(0);
+        console.log("Extra lives set to 0 (null/undefined)");
+      }
     });
 
     // Subscribe to spending stats changes
-    const spendingStatsChannel = subscribeToSpendingStatsChanges(user.username, (updatedStats) => {
+    const spendingStatsChannel = subscribeToSpendingStatsChanges(user.id, (updatedStats) => {
       setUserSpendingStats(updatedStats);
+      // Also update lives from spending stats
+      if (updatedStats?.current_lives !== undefined && updatedStats.current_lives !== null) {
+        console.log("Extra lives updated from spending stats:", updatedStats.current_lives);
+        setUserLives(updatedStats.current_lives);
+      } else {
+        setUserLives(0);
+        console.log("Extra lives set to 0 from spending stats");
+      }
     });
 
     // Subscribe to game scores changes (leaderboard updates)
@@ -145,12 +172,12 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
     });
 
     // Subscribe to user payment changes (simplified)
-    const paymentsChannel = subscribeToUserPaymentChanges(user.username, (updatedPaymentStats) => {
+    const paymentsChannel = subscribeToUserPaymentChanges(user.id, (updatedPaymentStats) => {
       setUserPayments([updatedPaymentStats]); // Keep as array for consistency
     });
 
     // Subscribe to user purchases changes
-    const purchasesChannel = subscribeToUserPurchasesChanges(user.username, (updatedPurchases) => {
+    const purchasesChannel = subscribeToUserPurchasesChanges(user.id, (updatedPurchases) => {
       setUserPurchases(updatedPurchases);
     });
 
@@ -177,9 +204,17 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
     loadData();
   }, [user]);
 
+  // Fix hydration mismatch - only render bubbles on client
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Real-time subscriptions handle updates automatically
+  // No need for polling - subscriptions are more efficient and smooth
+
   // Setup real-time subscriptions when component mounts and user changes
   useEffect(() => {
-    if (user.username) {
+    if (user.id) {
       setupRealtimeSubscriptions();
     }
 
@@ -187,24 +222,24 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
     return () => {
       cleanupRealtimeSubscriptions();
     };
-  }, [user.username]);
+  }, [user.id]);
 
-  // Close profile dropdown when clicking outside
+  // Close info dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setShowProfile(false);
+      if (infoPanelRef.current && !infoPanelRef.current.contains(event.target as Node)) {
+        setShowInfoPanel(false);
       }
     };
 
-    if (showProfile) {
+    if (showInfoPanel) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showProfile]);
+  }, [showInfoPanel]);
 
   // Convert leaderboard data for display
   const displayLeaderboard = leaderboard.map((entry, index) => ({
@@ -214,11 +249,14 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
     avatar: (entry.name || 'U').charAt(0).toUpperCase()
   }));
 
-  // Find user's rank - check both name and username
-  const userRank = leaderboard.findIndex(entry => 
+  // Find user's rank - check both name, username, and id
+  const userEntry = leaderboard.find(entry => 
+    entry.id === user.id ||
     entry.name === (user.name || user.username) || 
     entry.name === user.username
-  ) + 1;
+  );
+  const userRank = userEntry ? userEntry.rank : 0;
+  const userScore = userEntry ? userEntry.score : (userSpendingStats ? 0 : 0);
 
   // Show game if active
   if (showGame) {
@@ -234,8 +272,8 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
         onBackToMenu={() => {
           setShowGame(false);
           // Refresh data when returning to menu - force refresh to get updated hearts
-          if (user.username) {
-            invalidateUserCache(user.username);
+          if (user.id) {
+            invalidateUserCache(user.id);
           }
           loadData(true); // Force refresh
         }}
@@ -263,62 +301,58 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
         <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-emerald-500/10 to-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
-      {/* Header */}
-      <div className="relative z-10 bg-slate-900/95 backdrop-blur-xl border-b border-slate-700/50">
-        <div className="max-w-md lg:max-w-6xl mx-auto px-4 py-4">
+      {/* Header - Enhanced */}
+      <div className="relative z-10 bg-gradient-to-r from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-xl border-b border-primary/20 shadow-lg shadow-primary/10">
+        <div className="max-w-md lg:max-w-6xl mx-auto px-4 py-3 lg:py-4">
           <div className="flex items-center justify-between">
             {/* Game Logo and Title - LEFT SIDE */}
             <div className="flex items-center gap-3">
-              <img 
-                src="/icon/icon.png" 
-                alt="BubbleType" 
-                className="w-10 h-10"
-              />
-              <h1 className="text-lg font-bold text-white">BubbleType</h1>
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary to-accent rounded-xl blur-sm opacity-50"></div>
+                <img 
+                  src="/icon/icon.png" 
+                  alt="TypeRush" 
+                  className="relative w-10 h-10 lg:w-12 lg:h-12 rounded-xl"
+                />
+              </div>
+              <div className="flex flex-col">
+                <h1 className="text-lg lg:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-primary">
+                  TypeRush
+                </h1>
+              </div>
             </div>
             
             {/* Profile Icon - RIGHT SIDE */}
-            <button
-              onClick={() => setShowProfile(!showProfile)}
-              className="w-10 h-10 bg-slate-800/50 backdrop-blur-sm rounded-full flex items-center justify-center border border-slate-600/50 hover:bg-slate-700/50 transition-all duration-200"
-            >
-              <User className="w-5 h-5 text-white" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowInfoPanel((prev) => !prev)}
+                className="w-10 h-10 lg:w-11 lg:h-11 bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-sm rounded-xl flex items-center justify-center border border-primary/20 hover:border-primary/40 hover:bg-gradient-to-br hover:from-primary/20 hover:to-accent/20 transition-all duration-200 shadow-lg shadow-primary/10"
+                aria-label="Payment info"
+              >
+                <Info className="w-5 h-5 text-white" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Profile Dropdown */}
-      {showProfile && (
+      {/* Support Info Dropdown */}
+      {showInfoPanel && (
         <div 
-          ref={profileRef}
-          className="absolute top-16 right-4 lg:right-auto lg:left-auto lg:top-16 lg:right-4 z-30 bg-slate-800/95 backdrop-blur-xl rounded-xl border border-slate-700/50 shadow-2xl p-4 min-w-[200px]"
+          ref={infoPanelRef}
+          className="absolute top-16 right-4 z-30 bg-slate-900/95 backdrop-blur-xl rounded-xl border border-primary/30 shadow-xl p-3 w-64"
         >
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-emerald-500 rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-sm">{(user.name || "P").charAt(0).toUpperCase()}</span>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center">
+              <Info className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <div className="text-white font-bold text-sm">{user.name || "Player"}</div>
-              <div className="text-slate-400 text-xs">@{user.username}</div>
-            </div>
-          </div>
-          <div className="text-slate-300 text-xs mb-3">
-            Welcome back to BubbleType!
-          </div>
-          
-          {/* Spending Information */}
-          <div className="space-y-2">
-            {/* Total Amount Spent */}
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-bold">$</span>
-              </div>
-              <span className="text-yellow-400 font-bold text-sm">
-                Total Spent: ${userSpendingStats?.total_amount_spent?.toFixed(2) || '0.00'}
-              </span>
+            <div className="text-white font-semibold text-sm tracking-wide">
+              Support the Developer
             </div>
           </div>
+          <p className="text-slate-300 text-xs leading-relaxed">
+            Payments made here stay with the TypeRush creator—you are directly helping the build, not funding Whop fees.
+          </p>
         </div>
       )}
 
@@ -329,7 +363,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
         <div className="flex flex-col lg:w-1/2">
           {/* Game Preview - Modern Glassmorphism Design */}
           <div className="mb-3 lg:mb-6">
-            <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-800/60 backdrop-blur-2xl rounded-3xl lg:rounded-[2rem] p-4 lg:p-8 border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] overflow-hidden">
+          <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-800/60 backdrop-blur-2xl rounded-3xl lg:rounded-[2rem] p-4 lg:p-8 border border-primary/25 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] overflow-hidden">
               {/* Gradient Overlay */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
               
@@ -346,23 +380,38 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
                   </div>
                 </div>
 
-                {/* Animated Bubbles - Enhanced */}
-                <div className="relative h-20 lg:h-40 bg-gradient-to-b from-slate-900/80 via-slate-800/60 to-slate-900/80 rounded-2xl overflow-hidden border border-white/5">
-                  <div className="absolute top-3 lg:top-6 left-1/4 w-10 h-10 lg:w-16 lg:h-16 bg-gradient-to-br from-primary via-accent to-primary rounded-full flex items-center justify-center shadow-2xl shadow-primary/40 animate-bounce backdrop-blur-sm border border-white/20" style={{ animationDelay: '0s' }}>
-                    <span className="text-white font-black text-xs lg:text-base">type</span>
-                  </div>
-                  <div className="absolute top-5 lg:top-10 right-1/4 w-10 h-10 lg:w-16 lg:h-16 bg-gradient-to-br from-accent via-primary to-accent rounded-full flex items-center justify-center shadow-2xl shadow-accent/40 animate-bounce backdrop-blur-sm border border-white/20" style={{ animationDelay: '0.5s' }}>
-                    <span className="text-white font-black text-xs lg:text-base">game</span>
-                  </div>
-                  <div className="absolute top-8 lg:top-16 left-1/2 -translate-x-1/2 w-10 h-10 lg:w-16 lg:h-16 bg-gradient-to-br from-primary via-accent to-primary rounded-full flex items-center justify-center shadow-2xl shadow-primary/40 animate-bounce backdrop-blur-sm border border-white/20" style={{ animationDelay: '1s' }}>
-                    <span className="text-white font-black text-xs lg:text-base">fast</span>
-                  </div>
-                </div>
-
-                {/* Input Field - Redesigned */}
-                <div className="bg-slate-900/70 backdrop-blur-sm rounded-2xl lg:rounded-3xl p-3 lg:p-5 border border-white/10 shadow-inner">
-                  <div className="text-center text-slate-400 text-sm lg:text-lg font-medium">
-                    Type here...
+                {/* Bubble Wave Animation Preview - Full Height */}
+                <div className="relative h-32 lg:h-64 bg-gradient-to-b from-slate-900/80 via-slate-800/60 to-slate-900/80 rounded-2xl overflow-hidden border border-primary/30 bubble-wave-container">
+                  {/* Bubble Wave Animation - Only render on client to fix hydration */}
+                  {isMounted && [...Array(15)].map((_, i) => {
+                    const waveAmplitude = 40;
+                    const waveFrequency = 0.5;
+                    const baseY = 50;
+                    // Round to prevent hydration mismatch
+                    const yOffset = Math.round(Math.sin(i * waveFrequency) * waveAmplitude * 100) / 100;
+                    const size = 45 + (i % 3) * 12; // Varying sizes
+                    const delay = Math.round(i * 0.12 * 100) / 100; // Round delay
+                    
+                    return (
+                      <div
+                        key={i}
+                        className="bubble-wave"
+                        style={{
+                          width: `${size}px`,
+                          height: `${size}px`,
+                          top: `${Math.round((baseY + yOffset) * 100) / 100}%`,
+                          '--wave-offset': `${Math.round(yOffset * 100) / 100}px`,
+                          animationDelay: `${delay}s`,
+                        } as React.CSSProperties}
+                      />
+                    );
+                  })}
+                  
+                  {/* Center Text Overlay */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center pointer-events-none">
+                    <div className="text-white font-black text-sm lg:text-xl bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent drop-shadow-lg">
+                      Type & Blast!
+                    </div>
                   </div>
                 </div>
               </div>
@@ -382,34 +431,41 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
             </Button>
           </div>
 
-          {/* Top Spender Section - Modern Glassmorphism Design */}
+          {/* Extra Lives Balance Section - Compact Purple Design */}
           <div className="mt-4 lg:mt-6 mb-4 lg:mb-0">
-            <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-800/60 backdrop-blur-2xl rounded-3xl lg:rounded-[2rem] p-4 lg:p-6 border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] overflow-hidden">
-              {/* Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
+            <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-800/60 backdrop-blur-2xl rounded-2xl lg:rounded-xl p-4 lg:p-5 border border-primary/30 shadow-[0_4px_16px_0_rgba(168,85,247,0.2)] overflow-hidden">
+              {/* Purple Gradient Overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-accent/5 to-primary/10 pointer-events-none" />
               
-              <div className="relative text-center mb-3 lg:mb-4">
-                <div className="text-white font-black text-base lg:text-lg">Top Spender</div>
+              {/* Compact Header */}
+              <div className="relative flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-primary fill-primary" />
+                  <div className="text-white font-bold text-sm">Extra Lives</div>
+                </div>
+                <div className="text-primary font-black text-xl">
+                  {loading ? '...' : userLives}
+                </div>
               </div>
-              {loading ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="text-slate-400 text-sm">Loading...</div>
+              
+              {/* Compact Recharge Button - Theme Matched */}
+              <Button
+                onClick={() => {
+                  setShowHeartsPurchase(true);
+                }}
+                className="w-full bg-gradient-to-r from-primary via-accent to-primary hover:from-primary/90 hover:via-accent/90 hover:to-primary/90 text-white font-bold py-2.5 text-sm rounded-xl shadow-lg shadow-primary/40 transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden group border border-primary/30"
+              >
+                {/* Shine Effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                
+                {/* Glow Effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
+                
+                <div className="relative flex items-center justify-center gap-2">
+                  <Heart className="w-4 h-4 fill-white drop-shadow-lg" />
+                  <span className="font-black tracking-wide">Recharge</span>
                 </div>
-              ) : topSpender ? (
-                <div className="relative flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 lg:w-12 lg:h-12 bg-gradient-to-br from-primary via-accent to-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/50">
-                      <span className="text-white text-lg lg:text-xl font-black drop-shadow-lg">$</span>
-                    </div>
-                    <div className="text-primary font-black text-base lg:text-xl drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">{topSpender.name}</div>
-                  </div>
-                  <div className="text-accent text-base lg:text-xl font-black drop-shadow-[0_0_8px_rgba(217,70,239,0.5)]">${topSpender.total_amount_spent?.toFixed(2)}</div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center py-4">
-                  <div className="text-slate-400 text-sm">No purchases yet</div>
-                </div>
-              )}
+              </Button>
             </div>
           </div>
 
@@ -418,7 +474,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
         {/* Right Column - Leaderboard */}
         <div className="lg:w-1/2">
           {/* Leaderboard Section - Modern Glassmorphism Design */}
-          <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-800/60 backdrop-blur-2xl rounded-3xl lg:rounded-[2rem] p-4 lg:p-8 border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] overflow-hidden">
+          <div className="relative bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-800/60 backdrop-blur-2xl rounded-3xl lg:rounded-[2rem] p-4 lg:p-8 border border-primary/25 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] overflow-hidden">
             {/* Gradient Overlay */}
             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
             <div className="relative flex items-center justify-between mb-3 lg:mb-6">
@@ -429,7 +485,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="border-white/20 bg-white/5 text-white hover:bg-white/10 text-xs lg:text-sm px-2 lg:px-4 py-1 lg:py-2 h-7 lg:h-auto rounded-xl backdrop-blur-sm"
+                className="border-primary/40 bg-primary/5 text-white hover:bg-primary/10 text-xs lg:text-sm px-2 lg:px-4 py-1 lg:py-2 h-7 lg:h-auto rounded-xl backdrop-blur-sm"
                 onClick={() => setShowLeaderboard(true)}
               >
                 View All
@@ -496,7 +552,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
             </div>
 
             {/* User Position - Enhanced Design */}
-            <div className="relative mt-4 lg:mt-6 pt-3 lg:pt-4 border-t border-white/10">
+            <div className="relative mt-4 lg:mt-6 pt-3 lg:pt-4 border-t border-primary/20">
               {loading ? (
                 <div className="flex items-center justify-center py-4">
                   <div className="text-slate-400 text-sm">Loading your position...</div>
@@ -516,10 +572,7 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
                     </div>
                   </div>
                   <div className="relative text-primary font-black text-base lg:text-lg drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
-                    {(leaderboard.find(entry => 
-                      entry.name === (user.name || user.username) || 
-                      entry.name === user.username
-                    )?.score || 0).toLocaleString()}
+                    {userScore.toLocaleString()}
                   </div>
                 </div>
               ) : (
@@ -546,6 +599,61 @@ export default function MobileGamePage({ user }: MobileGamePageProps) {
 
       </div>
 
+      {/* Hearts Purchase Modal */}
+      {showHeartsPurchase && (
+        <GameOverPurchaseScreen
+          onClose={() => {
+            setShowHeartsPurchase(false);
+            // Real-time subscriptions will handle updates automatically
+            // No need for forced refresh
+          }}
+          currentScore={0}
+          bestScore={0}
+          onPurchaseSuccess={() => {
+            // Real-time subscriptions will automatically update the UI
+            // Just log for debugging - no forced refresh needed
+            console.log("Purchase success - real-time subscriptions will update UI");
+          }}
+        />
+      )}
+
+      {/* Bubble Wave Animation Styles */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .bubble-wave-container {
+          position: relative;
+          width: 100%;
+        }
+        .bubble-wave {
+          position: absolute;
+          border-radius: 50%;
+          background: linear-gradient(135deg, rgba(168, 85, 247, 0.5) 0%, rgba(236, 72, 153, 0.5) 100%);
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 
+            0 0 20px rgba(168, 85, 247, 0.6),
+            inset 0 0 20px rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(5px);
+          animation: bubbleWave 5s ease-in-out infinite;
+          transform: translateY(-50%);
+        }
+        @keyframes bubbleWave {
+          0% {
+            left: -80px;
+            transform: translateY(calc(-50% + var(--wave-offset, 0px)));
+            opacity: 0;
+          }
+          5% {
+            opacity: 1;
+          }
+          95% {
+            opacity: 1;
+          }
+          100% {
+            left: 100%;
+            transform: translateY(calc(-50% + var(--wave-offset, 0px)));
+            opacity: 0;
+          }
+        }
+      `}} />
     </div>
   );
 }

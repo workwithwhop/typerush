@@ -46,54 +46,73 @@ export const createOrUpdateUser = async (userData: {
   lives?: number
 }): Promise<User | null> => {
   try {
-    // Start with the simplest possible approach - just basic fields
-    const basicUserData = {
-      id: userData.id,
-      username: userData.username,
-      name: userData.name,
-      lives: userData.lives || 3
-    }
-
-    const { data, error } = await supabase
+    // First, check if user already exists
+    const { data: existingUser, error: checkError } = await supabase
       .from('users')
-      .upsert(basicUserData, {
-        onConflict: 'id',
-        ignoreDuplicates: false
-      })
-      .select()
+      .select('lives')
+      .eq('id', userData.id)
       .single()
 
-    if (error) {
-      // Try insert instead of upsert
-      const { data: insertData, error: insertError } = await supabase
+    const userExists = existingUser && !checkError
+
+    if (userExists) {
+      // User exists - only update username/name, preserve lives unless explicitly provided
+      console.log(`[createOrUpdateUser] User exists with ${existingUser.lives} lives. Preserving lives value.`)
+      
+      const updateData: any = {
+        username: userData.username,
+        name: userData.name
+      }
+
+      // Only update lives if explicitly provided
+      if (userData.lives !== undefined) {
+        updateData.lives = userData.lives
+        console.log(`[createOrUpdateUser] Lives explicitly provided: ${userData.lives}, will update`)
+      } else {
+        console.log(`[createOrUpdateUser] Lives not provided, preserving existing value: ${existingUser.lives}`)
+      }
+      // If lives not provided, don't include it - preserves existing value
+
+      const { data, error } = await supabase
         .from('users')
-        .insert(basicUserData)
+        .update(updateData)
+        .eq('id', userData.id)
         .select()
         .single()
-      
-      if (insertError) {
-        // If insert fails due to duplicate, try to get existing user
-        if (insertError.message && insertError.message.includes('duplicate')) {
-          const { data: existingData, error: fetchError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', userData.id)
-            .single()
-          
-          if (fetchError) {
-            return null
-          }
-          
-          return existingData
-        }
-        
+
+      if (error) {
+        console.error('[createOrUpdateUser] Error updating existing user:', error)
         return null
       }
-      
-      return insertData
-    }
 
-    return data
+      console.log(`[createOrUpdateUser] ✅ Updated user, lives preserved: ${data.lives}`)
+      return data
+    } else {
+      // New user - create with lives = 0 (or provided value)
+      const livesValue = userData.lives !== undefined ? userData.lives : 0
+      console.log(`[createOrUpdateUser] New user, creating with lives: ${livesValue}`)
+      
+      const insertData = {
+        id: userData.id,
+        username: userData.username,
+        name: userData.name,
+        lives: livesValue
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert(insertData)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('[createOrUpdateUser] Error creating new user:', error)
+        return null
+      }
+
+      console.log(`[createOrUpdateUser] ✅ Created new user with lives: ${data.lives}`)
+      return data
+    }
   } catch (err) {
     return null
   }
@@ -112,6 +131,52 @@ export const updateUserLives = async (userId: string, lives: number): Promise<bo
   return true
 }
 
+export const addHeartsToUser = async (userId: string, hearts: number): Promise<boolean> => {
+  try {
+    console.log(`[addHeartsToUser] Adding ${hearts} hearts to user ${userId}`);
+    
+    // Get current user data
+    const { data: currentUser, error: fetchError } = await supabase
+      .from('users')
+      .select('lives')
+      .eq('id', userId)
+      .single()
+
+    if (fetchError) {
+      console.error(`[addHeartsToUser] Error fetching user:`, fetchError);
+      return false
+    }
+
+    if (!currentUser) {
+      console.error(`[addHeartsToUser] User not found: ${userId}`);
+      return false
+    }
+
+    // Handle null/undefined lives - treat as 0
+    const currentLives = (currentUser.lives !== null && currentUser.lives !== undefined) ? currentUser.lives : 0;
+    const newLives = currentLives + hearts;
+    
+    console.log(`[addHeartsToUser] Current lives: ${currentLives}, Adding: ${hearts}, New total: ${newLives}`);
+
+    const { error, data } = await supabase
+      .from('users')
+      .update({ lives: newLives })
+      .eq('id', userId)
+      .select()
+
+    if (error) {
+      console.error(`[addHeartsToUser] Error updating lives:`, error);
+      return false
+    }
+
+    console.log(`[addHeartsToUser] ✅ Successfully updated user ${userId} lives to ${newLives}`);
+    return true
+  } catch (error) {
+    console.error(`[addHeartsToUser] Exception:`, error);
+    return false
+  }
+}
+
 // Game score functions
 export const saveGameScore = async (scoreData: {
   user_id: string
@@ -119,6 +184,8 @@ export const saveGameScore = async (scoreData: {
   combo: number
 }): Promise<boolean> => {
   try {
+    console.log(`[saveGameScore] Saving score for user ${scoreData.user_id}: score=${scoreData.score}, combo=${scoreData.combo}`);
+    
     // First, get current user data
     const { data: currentUser, error: fetchError } = await supabase
       .from('users')
@@ -127,43 +194,59 @@ export const saveGameScore = async (scoreData: {
       .single()
 
     if (fetchError) {
+      console.error(`[saveGameScore] Error fetching user:`, fetchError);
       return false
     }
 
     // Only update if this is a new best score or combo
-    const shouldUpdateScore = !currentUser?.best_score || scoreData.score > currentUser.best_score
-    const shouldUpdateCombo = !currentUser?.best_combo || scoreData.combo > currentUser.best_combo
+    const shouldUpdateScore = !currentUser?.best_score || scoreData.score > (currentUser.best_score || 0)
+    const shouldUpdateCombo = !currentUser?.best_combo || scoreData.combo > (currentUser.best_combo || 0)
+
+    console.log(`[saveGameScore] Should update score: ${shouldUpdateScore}, Should update combo: ${shouldUpdateCombo}`);
 
     if (shouldUpdateScore || shouldUpdateCombo) {
-      const { error: updateError } = await supabase
+      const updateData: any = {};
+      if (shouldUpdateScore) {
+        updateData.best_score = scoreData.score;
+      }
+      if (shouldUpdateCombo) {
+        updateData.best_combo = scoreData.combo;
+      }
+
+      const { error: updateError, data } = await supabase
         .from('users')
-        .update({
-          best_score: shouldUpdateScore ? scoreData.score : currentUser.best_score,
-          best_combo: shouldUpdateCombo ? scoreData.combo : currentUser.best_combo
-        })
+        .update(updateData)
         .eq('id', scoreData.user_id)
+        .select()
 
       if (updateError) {
+        console.error(`[saveGameScore] Error updating score:`, updateError);
         return false
       }
+
+      console.log(`[saveGameScore] ✅ Successfully updated score:`, data);
+    } else {
+      console.log(`[saveGameScore] Score not higher than current best, skipping update`);
     }
 
     return true
   } catch (error) {
+    console.error(`[saveGameScore] Exception:`, error);
     return false
   }
 }
 
-export const getLeaderboard = async (limit: number = 10): Promise<LeaderboardEntry[]> => {
+export const getLeaderboard = async (limit: number = 10, userId?: string): Promise<LeaderboardEntry[]> => {
   try {
+    // Get all users with scores (including 0 scores)
     const { data, error } = await supabase
       .from('users')
       .select('id, username, name, best_score, best_combo')
-      .not('best_score', 'is', null)
       .order('best_score', { ascending: false })
       .limit(limit)
 
     if (error) {
+      console.error('[getLeaderboard] Error:', error);
       return []
     }
 
@@ -171,14 +254,50 @@ export const getLeaderboard = async (limit: number = 10): Promise<LeaderboardEnt
       return []
     }
 
-    return data.map((entry: any, index: number) => ({
+    // If userId provided, ensure user is included even if not in top 10
+    let leaderboardData = data.map((entry: any, index: number) => ({
       rank: index + 1,
       name: entry.name || entry.username || 'Unknown Player',
       score: entry.best_score || 0,
       combo: entry.best_combo || 0,
-      date: new Date().toLocaleDateString() // Simplified date
-    }))
+      date: new Date().toLocaleDateString(),
+      id: entry.id
+    }));
+
+    // If user not in top 10, add them at the end
+    if (userId) {
+      const userInLeaderboard = leaderboardData.find(entry => entry.id === userId);
+      if (!userInLeaderboard) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id, username, name, best_score, best_combo')
+          .eq('id', userId)
+          .single();
+
+        if (userData) {
+          // Find user's actual rank
+          const { count } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .gt('best_score', userData.best_score || 0);
+
+          const userRank = (count || 0) + 1;
+          
+          leaderboardData.push({
+            rank: userRank,
+            name: userData.name || userData.username || 'Unknown Player',
+            score: userData.best_score || 0,
+            combo: userData.best_combo || 0,
+            date: new Date().toLocaleDateString(),
+            id: userData.id
+          });
+        }
+      }
+    }
+
+    return leaderboardData
   } catch (error) {
+    console.error('[getLeaderboard] Exception:', error);
     return []
   }
 }
@@ -225,7 +344,7 @@ export const recordPayment = async (paymentData: {
           id: paymentData.user_id,
           username: paymentData.user_id, // Use user_id as username for now
           name: 'Player',
-          lives: 3, // Start with 3 lives
+          lives: 0, // Start with 0 extra lives (no default)
           total_spent: 0,
           payment_count: 0,
           created_at: new Date().toISOString()
@@ -245,7 +364,7 @@ export const recordPayment = async (paymentData: {
       .from('users')
       .update({
         total_spent: (currentUser.total_spent || 0) + paymentData.amount,
-        lives: (currentUser.lives || 3) + 1, // Add 1 life for $2 payment
+        lives: (currentUser.lives || 0) + 1, // Add 1 life for payment
         payment_count: (currentUser.payment_count || 0) + 1,
         last_payment_date: new Date().toISOString()
       })
@@ -452,7 +571,7 @@ export const subscribeToSpendingStatsChanges = (
             if (payload.new) {
               onUpdate({
                 total_amount_spent: (payload.new as any).total_spent || 0,
-                current_lives: (payload.new as any).lives || 3
+                current_lives: (payload.new as any).lives !== null && (payload.new as any).lives !== undefined ? (payload.new as any).lives : 0
               })
             }
             break
@@ -461,7 +580,7 @@ export const subscribeToSpendingStatsChanges = (
             if (payload.new) {
               onUpdate({
                 total_amount_spent: (payload.new as any).total_spent || 0,
-                current_lives: (payload.new as any).lives || 3
+                current_lives: (payload.new as any).lives !== null && (payload.new as any).lives !== undefined ? (payload.new as any).lives : 0
               })
             }
             break
@@ -470,7 +589,7 @@ export const subscribeToSpendingStatsChanges = (
             // Reset to default values
             onUpdate({
               total_amount_spent: 0,
-              current_lives: 3
+              current_lives: 0
             })
             break
         }

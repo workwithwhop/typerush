@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Trophy, Zap, Star, Sparkles, Target, Award, Menu, ArrowLeft } from 'lucide-react';
+import { Trophy, Zap, Star, Sparkles, Target, Award, Menu, ArrowLeft, Heart, Settings, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { saveGameScore, getUserBestScore, getUserSpendingStats, invalidateUserCache, subscribeToUserChanges, subscribeToSpendingStatsChanges, subscribeToUserPaymentChanges, unsubscribeFromChannel, recordPayment } from '@/lib/database-optimized';
+import { saveGameScore, getUserBestScore, getUserSpendingStats, getUser, invalidateUserCache, subscribeToUserChanges, subscribeToSpendingStatsChanges, subscribeToUserPaymentChanges, unsubscribeFromChannel, recordPayment, updateUserLives } from '@/lib/database-optimized';
 import { createCheckoutConfig } from '@/lib/actions/charge-user';
 import { useIframeSdk } from '@whop/react';
 import { useToast } from '@/hooks/use-toast';
 import { Toast, ToastContainer } from '@/components/ui/toast';
+import GameOverPurchaseScreen from './GameOverPurchaseScreen';
 
 const WORDS = [
   // Basic words
@@ -19,112 +20,112 @@ const WORDS = [
   'wind', 'solar', 'moon', 'star', 'cloud', 'rain', 'snow', 'heat', 'cold',
   'light', 'dark', 'happy', 'music', 'dance', 'sing', 'dream', 'hope', 'love',
   'peace', 'magic', 'power', 'energy', 'force', 'rush', 'blast', 'zoom',
-  
+
   // Animals
   'lion', 'tiger', 'bear', 'wolf', 'fox', 'deer', 'rabbit', 'mouse', 'bird', 'fish',
   'shark', 'whale', 'dolphin', 'eagle', 'owl', 'snake', 'frog', 'spider', 'bee', 'ant',
   'elephant', 'giraffe', 'zebra', 'monkey', 'panda', 'koala', 'kangaroo', 'penguin', 'flamingo', 'peacock',
-  
+
   // Colors
   'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'black', 'white', 'gray',
   'brown', 'gold', 'silver', 'bronze', 'crimson', 'azure', 'emerald', 'violet', 'scarlet', 'indigo',
-  
+
   // Nature
   'tree', 'flower', 'grass', 'leaf', 'branch', 'root', 'seed', 'fruit', 'berry', 'nut',
   'mountain', 'valley', 'river', 'ocean', 'lake', 'forest', 'desert', 'island', 'beach', 'cave',
   'volcano', 'canyon', 'waterfall', 'meadow', 'garden', 'park', 'jungle', 'tundra', 'prairie', 'swamp',
-  
+
   // Food
   'apple', 'banana', 'orange', 'grape', 'strawberry', 'cherry', 'lemon', 'lime', 'peach', 'pear',
   'bread', 'cheese', 'milk', 'butter', 'sugar', 'salt', 'pepper', 'honey', 'jam', 'cake',
   'pizza', 'burger', 'pasta', 'rice', 'soup', 'salad', 'sandwich', 'cookie', 'candy', 'chocolate',
   'coffee', 'tea', 'juice', 'water', 'soda', 'beer', 'wine', 'smoothie', 'yogurt', 'ice',
-  
+
   // Technology
   'computer', 'phone', 'tablet', 'laptop', 'keyboard', 'mouse', 'screen', 'monitor', 'camera', 'speaker',
   'internet', 'website', 'email', 'password', 'username', 'download', 'upload', 'stream', 'video', 'audio',
   'software', 'hardware', 'program', 'app', 'browser', 'search', 'click', 'scroll', 'swipe', 'touch',
-  
+
   // Sports
   'football', 'basketball', 'soccer', 'tennis', 'golf', 'baseball', 'hockey', 'swimming', 'running', 'cycling',
   'boxing', 'wrestling', 'karate', 'yoga', 'pilates', 'gym', 'fitness', 'training', 'exercise', 'workout',
   'marathon', 'sprint', 'jump', 'throw', 'catch', 'kick', 'punch', 'dive', 'climb', 'skate',
-  
+
   // Transportation
   'car', 'truck', 'bus', 'train', 'plane', 'boat', 'ship', 'bike', 'motorcycle', 'scooter',
   'taxi', 'uber', 'subway', 'metro', 'helicopter', 'rocket', 'spaceship', 'sailboat', 'yacht', 'cruise',
   'drive', 'fly', 'sail', 'ride', 'walk', 'run', 'jog', 'hike', 'travel', 'journey',
-  
+
   // Emotions
   'happy', 'sad', 'angry', 'excited', 'nervous', 'calm', 'peaceful', 'anxious', 'confident', 'shy',
   'brave', 'scared', 'surprised', 'confused', 'proud', 'jealous', 'grateful', 'hopeful', 'worried', 'relaxed',
   'cheerful', 'moody', 'energetic', 'tired', 'awake', 'sleepy', 'alert', 'focused', 'distracted', 'curious',
-  
+
   // Weather
   'sunny', 'cloudy', 'rainy', 'snowy', 'windy', 'stormy', 'foggy', 'hot', 'warm', 'cool',
   'freezing', 'humid', 'dry', 'wet', 'damp', 'breezy', 'calm', 'tornado', 'hurricane', 'blizzard',
   'thunder', 'lightning', 'rainbow', 'sunrise', 'sunset', 'dawn', 'dusk', 'twilight', 'midnight', 'noon',
-  
+
   // Body parts
   'head', 'eye', 'nose', 'mouth', 'ear', 'hand', 'finger', 'arm', 'leg', 'foot',
   'toe', 'knee', 'elbow', 'shoulder', 'chest', 'back', 'stomach', 'heart', 'brain', 'skin',
   'hair', 'beard', 'mustache', 'lip', 'tooth', 'tongue', 'throat', 'neck', 'wrist', 'ankle',
-  
+
   // Clothing
   'shirt', 'pants', 'dress', 'skirt', 'jacket', 'coat', 'sweater', 'hoodie', 'tank', 'shorts',
   'socks', 'shoes', 'boots', 'sandals', 'hat', 'cap', 'gloves', 'scarf', 'belt', 'tie',
   'suit', 'uniform', 'costume', 'pajamas', 'underwear', 'bra', 'panties', 'swimsuit', 'bikini', 'robe',
-  
+
   // School/Education
   'book', 'pen', 'pencil', 'paper', 'notebook', 'desk', 'chair', 'teacher', 'student', 'class',
   'lesson', 'homework', 'test', 'exam', 'grade', 'school', 'college', 'university', 'library', 'study',
   'learn', 'teach', 'read', 'write', 'draw', 'paint', 'calculate', 'solve', 'question', 'answer',
-  
+
   // Time
   'second', 'minute', 'hour', 'day', 'week', 'month', 'year', 'decade', 'century', 'millennium',
   'morning', 'afternoon', 'evening', 'night', 'today', 'yesterday', 'tomorrow', 'now', 'then', 'soon',
   'early', 'late', 'on', 'time', 'schedule', 'calendar', 'clock', 'watch', 'timer', 'alarm',
-  
+
   // Numbers
   'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
   'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty',
   'hundred', 'thousand', 'million', 'billion', 'trillion', 'first', 'second', 'third', 'last', 'next',
-  
+
   // Family
   'mother', 'father', 'mom', 'dad', 'parent', 'son', 'daughter', 'child', 'baby', 'brother',
   'sister', 'sibling', 'grandmother', 'grandfather', 'grandma', 'grandpa', 'uncle', 'aunt', 'cousin', 'nephew',
   'niece', 'husband', 'wife', 'spouse', 'partner', 'boyfriend', 'girlfriend', 'friend', 'neighbor', 'stranger',
-  
+
   // Home
   'house', 'home', 'apartment', 'room', 'bedroom', 'kitchen', 'bathroom', 'living', 'dining', 'garage',
   'garden', 'yard', 'fence', 'gate', 'door', 'window', 'wall', 'floor', 'ceiling', 'roof',
   'stairs', 'elevator', 'basement', 'attic', 'balcony', 'porch', 'patio', 'deck', 'pool', 'hot',
-  
+
   // Music
   'song', 'music', 'melody', 'rhythm', 'beat', 'drum', 'guitar', 'piano', 'violin', 'flute',
   'trumpet', 'saxophone', 'microphone', 'speaker', 'headphone', 'radio', 'cd', 'record', 'concert', 'band',
   'singer', 'musician', 'composer', 'lyrics', 'verse', 'chorus', 'bridge', 'intro', 'outro', 'solo',
-  
+
   // Art
   'art', 'painting', 'drawing', 'sketch', 'sculpture', 'statue', 'portrait', 'landscape', 'abstract', 'realistic',
   'canvas', 'brush', 'paint', 'color', 'palette', 'easel', 'gallery', 'museum', 'exhibition', 'artist',
   'creative', 'imagination', 'inspiration', 'beauty', 'style', 'technique', 'masterpiece', 'work', 'piece', 'design',
-  
+
   // Science
   'science', 'experiment', 'discovery', 'invention', 'research', 'study', 'theory', 'hypothesis', 'evidence', 'proof',
   'chemistry', 'physics', 'biology', 'mathematics', 'astronomy', 'geology', 'medicine', 'technology', 'innovation', 'progress',
   'atom', 'molecule', 'cell', 'gene', 'dna', 'evolution', 'gravity', 'energy', 'matter', 'universe',
-  
+
   // Space
   'space', 'planet', 'star', 'sun', 'moon', 'earth', 'mars', 'jupiter', 'saturn', 'galaxy',
   'universe', 'cosmos', 'astronaut', 'rocket', 'spaceship', 'satellite', 'orbit', 'gravity', 'solar', 'lunar',
   'eclipse', 'meteor', 'comet', 'asteroid', 'nebula', 'black', 'hole', 'constellation', 'telescope', 'observatory',
-  
+
   // Fantasy/Magic
   'magic', 'wizard', 'witch', 'fairy', 'dragon', 'unicorn', 'phoenix', 'elf', 'dwarf', 'giant',
   'castle', 'tower', 'dungeon', 'cave', 'forest', 'enchanted', 'spell', 'potion', 'wand', 'crystal',
   'treasure', 'gold', 'silver', 'diamond', 'ruby', 'emerald', 'sapphire', 'pearl', 'jewel', 'crown',
-  
+
   // Adventure
   'adventure', 'journey', 'quest', 'mission', 'expedition', 'exploration', 'discovery', 'treasure', 'map', 'compass',
   'mountain', 'valley', 'river', 'ocean', 'island', 'desert', 'jungle', 'cave', 'bridge', 'path',
@@ -175,10 +176,11 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [score, setScore] = useState(0);
-  const [lives, setLives] = useState(3);
+  const [lives, setLives] = useState(0); // Start with 0 - no default lives
+  const livesRef = useRef(0); // Track lives in ref for game loop
   const iframeSdk = useIframeSdk();
   const { toasts, removeToast, showError, showSuccess } = useToast();
-  
+
   const [inputValue, setInputValue] = useState('');
   const [gameState, setGameState] = useState('playing');
   const [highScore, setHighScore] = useState(0);
@@ -190,6 +192,8 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   const [maxCombo, setMaxCombo] = useState(0);
   const [isNewGame, setIsNewGame] = useState(true);
   const [usedWords, setUsedWords] = useState<Set<string>>(new Set());
+  const [bubbleType, setBubbleType] = useState<'bubble' | 'circle' | 'square' | 'hexagon'>('bubble'); // Object customization
+  const [showSettings, setShowSettings] = useState(false);
   // No heart system - removed pendingHeartUpdate state
   const inputRef = useRef<HTMLInputElement>(null);
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
@@ -208,7 +212,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
 
   // Load user data from database with optimized caching
   const loadUserData = React.useCallback(async (forceLoadHearts = false) => {
-    if (!user?.username) {
+    if (!user?.id) {
       // Fallback to localStorage for non-authenticated users
       const savedHighScore = localStorage.getItem('bubbleTypeHighScore');
       if (savedHighScore) setHighScore(parseInt(savedHighScore));
@@ -217,7 +221,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
 
     try {
       // Load best score from database (with caching)
-      const dbBestScore = await getUserBestScore(user.username);
+      const dbBestScore = await getUserBestScore(user.id);
       if (dbBestScore > 0) {
         setHighScore(dbBestScore);
       } else {
@@ -227,13 +231,49 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
       }
 
       // Always load lives from database for consistency
-      const spendingStats = await getUserSpendingStats(user.username);
-      
+      const spendingStats = await getUserSpendingStats(user.id);
+
       if (spendingStats?.current_lives !== undefined) {
         // For gameplay, use current_lives
+        livesRef.current = spendingStats.current_lives;
         setLives(spendingStats.current_lives);
+
+        // If user just purchased extra lives and game is over, continue game from where it ended
+        if (gameState === 'gameover' && spendingStats.current_lives > 0) {
+          setShowAdModal(false);
+          setGameState('playing');
+          livesRef.current = spendingStats.current_lives;
+          setLives(spendingStats.current_lives);
+          
+          // Resume the game loop if not already running
+          if (!gameLoopRef.current && gameState === 'playing') {
+            // Game loop will be started by useEffect
+          }
+          
+          inputRef.current?.focus();
+          // Continue spawning bubbles
+          if (bubbles.length === 0) {
+            spawnBubble();
+          }
+        }
       } else {
-        setLives(3);
+        // No spending stats found - try to get from user data directly
+        try {
+          const userData = await getUser(user.id);
+          if (userData?.lives !== undefined && userData.lives !== null) {
+            livesRef.current = userData.lives;
+            setLives(userData.lives);
+            console.log(`[loadUserData] Loaded ${userData.lives} lives from user data`);
+          } else {
+            // Really no lives found - preserve current value, don't reset to 0
+            // This prevents overwriting lives that were just purchased
+            console.log(`[loadUserData] No lives found, preserving current value: ${livesRef.current}`);
+          }
+        } catch (error) {
+          console.error(`[loadUserData] Error loading user data:`, error);
+          // On error, preserve current value
+          console.log(`[loadUserData] Error loading, keeping current lives: ${livesRef.current}`);
+        }
       }
     } catch (error) {
       // Silent error handling
@@ -247,17 +287,28 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
       const savedLeaderboard = localStorage.getItem('bubbleTypeLeaderboard');
       if (savedLeaderboard) setLeaderboard(JSON.parse(savedLeaderboard));
     }
-  }, [user?.username, leaderboard.length]);
+  }, [user?.id, leaderboard.length, gameState]);
 
   useEffect(() => {
     loadUserData();
   }, [user, loadUserData]);
 
+  // Poll for hearts updates when on game over screen (user might have purchased hearts)
+  useEffect(() => {
+    if (gameState === 'gameover' && showAdModal && user?.id) {
+      const pollInterval = setInterval(() => {
+        loadUserData(true);
+      }, 2000); // Check every 2 seconds
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [gameState, showAdModal, user?.id, loadUserData]);
+
   // No heart system - removed heart update handling
 
   // Setup real-time subscriptions for game component
   const setupGameRealtimeSubscriptions = React.useCallback(() => {
-    if (!user?.username) return;
+    if (!user?.id) return;
 
     // Clear existing subscriptions
     realtimeChannelsRef.current.forEach(channel => {
@@ -266,31 +317,33 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
     realtimeChannelsRef.current = [];
 
     // Subscribe to user data changes (for lives)
-    const userChannel = subscribeToUserChanges(user.username, (updatedUser) => {
+    const userChannel = subscribeToUserChanges(user.id, (updatedUser) => {
       // Update lives if they changed externally
-      if (updatedUser.lives !== lives) {
+      if (updatedUser.lives !== livesRef.current) {
+        livesRef.current = updatedUser.lives;
         setLives(updatedUser.lives);
       }
     });
 
     // Subscribe to spending stats changes
-    const spendingStatsChannel = subscribeToSpendingStatsChanges(user.username, (updatedStats: any) => {
+    const spendingStatsChannel = subscribeToSpendingStatsChanges(user.id, (updatedStats: any) => {
       // Update lives based on current_lives
       if (updatedStats?.current_lives !== undefined) {
-        if (updatedStats.current_lives !== lives) {
+        if (updatedStats.current_lives !== livesRef.current) {
+          livesRef.current = updatedStats.current_lives;
           setLives(updatedStats.current_lives);
         }
       }
     });
 
     // Subscribe to user payment changes for real-time payment tracking
-    const paymentsChannel = subscribeToUserPaymentChanges(user.username, (updatedPaymentStats: any) => {
+    const paymentsChannel = subscribeToUserPaymentChanges(user.id, (updatedPaymentStats: any) => {
       // Could be used to show payment stats or confirm payments
     });
 
     // Store channels for cleanup
     realtimeChannelsRef.current = [userChannel, spendingStatsChannel, paymentsChannel];
-  }, [user?.username, lives]);
+  }, [user?.id, lives]);
 
   // Cleanup real-time subscriptions
   const cleanupGameRealtimeSubscriptions = React.useCallback(() => {
@@ -302,7 +355,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
 
   // Setup real-time subscriptions when game starts
   useEffect(() => {
-    if (gameState === 'playing' && user?.username) {
+    if (gameState === 'playing' && user?.id) {
       setupGameRealtimeSubscriptions();
     }
 
@@ -310,20 +363,51 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
     return () => {
       cleanupGameRealtimeSubscriptions();
     };
-  }, [gameState, user?.username, setupGameRealtimeSubscriptions, cleanupGameRealtimeSubscriptions]);
+  }, [gameState, user?.id, setupGameRealtimeSubscriptions, cleanupGameRealtimeSubscriptions]);
 
 
   const startGame = async () => {
-    // Always load user data from database for consistency
-    await loadUserData(true);
-    
+    // Load current extra lives from database - DON'T reset to 0
+    // Extra lives should persist across games
+    // NEVER write 0 to database here - only read!
+    if (user?.id) {
+      try {
+        const spendingStats = await getUserSpendingStats(user.id);
+        if (spendingStats?.current_lives !== undefined && spendingStats.current_lives !== null) {
+          livesRef.current = spendingStats.current_lives;
+          setLives(spendingStats.current_lives);
+          console.log(`[startGame] ✅ Loaded ${spendingStats.current_lives} extra lives from database`);
+        } else {
+          // No lives found - check database directly
+          const userData = await getUser(user.id);
+          if (userData?.lives !== undefined && userData.lives !== null) {
+            livesRef.current = userData.lives;
+            setLives(userData.lives);
+            console.log(`[startGame] ✅ Loaded ${userData.lives} extra lives from user data`);
+          } else {
+            // Really no lives - use 0 for display only, DON'T write to database
+            livesRef.current = 0;
+            setLives(0);
+            console.log(`[startGame] No lives in database, using 0 (not writing to DB)`);
+          }
+        }
+      } catch (error) {
+        console.error(`[startGame] Error loading lives:`, error);
+        // On error, keep current value, don't reset
+        console.log(`[startGame] Error loading, keeping current lives: ${livesRef.current}`);
+      }
+    } else {
+      // No user - use 0 for display only
+      livesRef.current = 0;
+      setLives(0);
+    }
+
     // Clear processed bubble tracking on game start
     processedBubblesRef.current.clear();
-    
+
     setBubbles([]);
     setParticles([]);
     setScore(0);
-    // Lives are set from localStorage or default to 3
     setInputValue('');
     setGameState('playing');
     setDifficulty(1);
@@ -345,31 +429,31 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   const spawnBubble = () => {
     // Get available words (not used yet)
     const availableWords = WORDS.filter(word => !usedWords.has(word));
-    
+
     // If all words have been used, reset the used words set
     if (availableWords.length === 0) {
       setUsedWords(new Set());
       // Use all words again
-    const word = WORDS[Math.floor(Math.random() * WORDS.length)];
+      const word = WORDS[Math.floor(Math.random() * WORDS.length)];
       setUsedWords(prev => new Set([...prev, word]));
-      
-    const newBubble = {
-      id: bubbleIdRef.current++,
-      word,
-      x: Math.random() * 80 + 10, // Better mobile positioning
-      y: -5,
-      speed: 0.25 + (difficulty * 0.08),
-      scale: 1,
-      rotation: 0, // No rotation - bubbles appear at 0 degrees
-    };
-    setBubbles(prev => [...prev, newBubble]);
+
+      const newBubble = {
+        id: bubbleIdRef.current++,
+        word,
+        x: Math.random() * 80 + 10, // Better mobile positioning
+        y: -5,
+        speed: 0.25 + (difficulty * 0.08),
+        scale: 1,
+        rotation: 0, // No rotation - bubbles appear at 0 degrees
+      };
+      setBubbles(prev => [...prev, newBubble]);
     } else {
       // Select a random word from available words
       const word = availableWords[Math.floor(Math.random() * availableWords.length)];
-      
+
       // Mark this word as used
       setUsedWords(prev => new Set([...prev, word]));
-      
+
       const newBubble = {
         id: bubbleIdRef.current++,
         word,
@@ -385,14 +469,16 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
 
   const createParticles = (x: number, y: number) => {
     // Reduced particle count for better performance
-    const newParticles = Array.from({ length: 6 }, (_, i) => ({
+    // Use theme colors (primary/accent purple) instead of green
+    const themeColors = ['#a855f7', '#c084fc', '#d8b4fe', '#e9d5ff']; // Purple gradient colors
+    const newParticles = Array.from({ length: 8 }, (_, i) => ({
       id: particleIdRef.current++,
       x,
       y,
-      vx: (Math.random() - 0.5) * 4,
-      vy: (Math.random() - 0.5) * 4,
+      vx: (Math.random() - 0.5) * 5,
+      vy: (Math.random() - 0.5) * 5,
       life: 1,
-      color: '#10b981' // Single color for better performance
+      color: themeColors[Math.floor(Math.random() * themeColors.length)] // Theme colors
     }));
     setParticles(prev => [...prev, ...newParticles]);
   };
@@ -417,46 +503,60 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
         const bubblesAtBottom = updated.filter(b => b.y > 88);
         if (bubblesAtBottom.length > 0) {
           // Found bubbles at bottom
-          
+
           // Process ONLY unprocessed bubbles - 100% perfect 1:1 ratio
           const unprocessedBubbles = bubblesAtBottom.filter(b => !processedBubblesRef.current.has(b.id));
-          
+
           if (unprocessedBubbles.length > 0) {
             const bubbleToProcess = unprocessedBubbles[0];
-            
+
             // Mark this bubble as processed immediately to prevent double-processing
             processedBubblesRef.current.add(bubbleToProcess.id);
-            // Processing bubble - marked as processed
-            
-            // GAME OVER - End game immediately when any bubble touches bottom
-            
-            // Save score when game ends
-            saveCurrentScore();
-            
-            // Game ended - no heart system needed
-            
-            // Set game over state immediately
-            setGameState('gameover');
-            setShowAdModal(true);
-            
-            // Stop the game loop
-            if (gameLoopRef.current) {
-              clearInterval(gameLoopRef.current);
-              gameLoopRef.current = null;
+
+            // Check if user has extra lives
+            if (livesRef.current > 0) {
+              // User has extra lives - reduce by 1
+              const newLives = livesRef.current - 1;
+              livesRef.current = newLives;
+              setLives(newLives);
+
+              // Update database in real-time
+              if (user?.id) {
+                updateUserLives(user.id, newLives).catch(error => {
+                  console.error('Error updating lives in database:', error);
+                });
+              }
+
+              // Remove only the bubble that touched bottom and continue game
+              return updated.filter(b => b.id !== bubbleToProcess.id);
+            } else {
+              // No extra lives - game over
+              // Save score when game ends
+              saveCurrentScore();
+
+              // Set game over state
+              setGameState('gameover');
+              setShowAdModal(true);
+
+              // Stop the game loop
+              if (gameLoopRef.current) {
+                clearInterval(gameLoopRef.current);
+                gameLoopRef.current = null;
+              }
+
+              setCombo(0);
+              setUsedWords(new Set()); // Reset used words for next game
+
+              // Game is over - return empty array to clear all bubbles
+              return [];
             }
-            
-            setCombo(0);
-            setUsedWords(new Set()); // Reset used words for next game
-            
-            // Game is over - return empty array to clear all bubbles
-            return [];
           }
         }
 
         return updated;
       });
 
-      setParticles(prev => 
+      setParticles(prev =>
         prev
           .map(p => ({
             ...p,
@@ -509,121 +609,121 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   };
 
 
-    const purchaseHearts = async () => {
-      if (!user) return;
+  const purchaseHearts = async () => {
+    if (!user) return;
 
-      try {
-        // Step 1: Create checkout configuration on server
-        const config = await createCheckoutConfig();
+    try {
+      // Step 1: Create checkout configuration on server
+      const config = await createCheckoutConfig();
 
-        if (!config || !config.checkoutId || !config.planId) {
-          showError("Failed to create checkout configuration");
-          handlePaymentFallback();
-          return;
-        }
-
-        // Step 2: Use iframe SDK to open Whop checkout modal
-        const result = await iframeSdk.inAppPurchase({
-          planId: config.planId,
-          id: config.checkoutId
-        });
-
-        // Handle the result
-        if (result.status === "error") {
-          showError("Payment cancelled by user");
-          return;
-        }
-
-        // Payment successful - result.data contains receipt_id
-        showSuccess("Payment successful! Game continued with 1 life");
-        
-        // Close the modal and continue game
-        setShowAdModal(false);
-        
-        // Give 1 life to continue the game
-        setLives(1);
-        
-        // Continue the game from where it left off
-        setIsNewGame(false);
-        setGameState('playing');
-        setBubbles([]);
-        setParticles([]);
-        
-        // Note: Payment recording is handled by webhook for security
-        // The webhook validates the payment server-side and updates the database
-        
-      } catch (error) {
-        console.error("Payment error:", error);
-        showError("Payment failed. Please try again.");
-        // Fallback to old system if Whop fails
+      if (!config || !config.checkoutId || !config.planId) {
+        showError("Failed to create checkout configuration");
         handlePaymentFallback();
+        return;
       }
-    };
 
-    // Fallback function for when payment fails
-    const handlePaymentFallback = () => {
-      try {
-        // Give 1 life to continue the game (simple system)
-        setLives(1);
-        
-        // Close modal and continue game
-        setShowAdModal(false);
-        
-        // Continue the game from where it left off - maintain score but clear bubbles
-        setIsNewGame(false); // This is not a new game, it's a continuation
-        setGameState('playing');
-        
-        // Clear existing bubbles and particles - start fresh bubbles from top
-        setBubbles([]);
-        setParticles([]);
-        
-        // Clear processed bubbles tracking to start fresh
-        processedBubblesRef.current.clear();
-        
-        // Reset used words for fresh word pool after payment
-        setUsedWords(new Set());
-        
-        // Spawn the first bubble quickly after continuing
-        setTimeout(() => {
-          spawnBubble();
-        }, 500); // Small delay to ensure game state is properly set
-        
-        // Don't reset score, combo, difficulty - just clear bubbles and continue
-        inputRef.current?.focus();
-        
-      } catch (error) {
-        // Error processing payment fallback
-        // Still continue the game even if database save fails
-        setLives(1);
-        setShowAdModal(false);
-        setIsNewGame(false);
-        setGameState('playing');
-        
-        // Clear existing bubbles and particles - start fresh bubbles from top
-        setBubbles([]);
-        setParticles([]);
-        
-        // Clear processed bubbles tracking to start fresh
-        processedBubblesRef.current.clear();
-        
-        // Reset used words for fresh word pool after payment
-        setUsedWords(new Set());
-        
-        // Spawn the first bubble quickly after continuing
-        setTimeout(() => {
-          spawnBubble();
-        }, 500); // Small delay to ensure game state is properly set
-        
-        inputRef.current?.focus();
+      // Step 2: Use iframe SDK to open Whop checkout modal
+      const result = await iframeSdk.inAppPurchase({
+        planId: config.planId,
+        id: config.checkoutId
+      });
+
+      // Handle the result
+      if (result.status === "error") {
+        showError("Payment cancelled by user");
+        return;
       }
-    };
+
+      // Payment successful - result.data contains receipt_id
+      showSuccess("Payment successful! Game continued with 1 life");
+
+      // Close the modal and continue game
+      setShowAdModal(false);
+
+      // Give 1 life to continue the game
+      setLives(1);
+
+      // Continue the game from where it left off
+      setIsNewGame(false);
+      setGameState('playing');
+      setBubbles([]);
+      setParticles([]);
+
+      // Note: Payment recording is handled by webhook for security
+      // The webhook validates the payment server-side and updates the database
+
+    } catch (error) {
+      console.error("Payment error:", error);
+      showError("Payment failed. Please try again.");
+      // Fallback to old system if Whop fails
+      handlePaymentFallback();
+    }
+  };
+
+  // Fallback function for when payment fails
+  const handlePaymentFallback = () => {
+    try {
+      // Give 1 life to continue the game (simple system)
+      setLives(1);
+
+      // Close modal and continue game
+      setShowAdModal(false);
+
+      // Continue the game from where it left off - maintain score but clear bubbles
+      setIsNewGame(false); // This is not a new game, it's a continuation
+      setGameState('playing');
+
+      // Clear existing bubbles and particles - start fresh bubbles from top
+      setBubbles([]);
+      setParticles([]);
+
+      // Clear processed bubbles tracking to start fresh
+      processedBubblesRef.current.clear();
+
+      // Reset used words for fresh word pool after payment
+      setUsedWords(new Set());
+
+      // Spawn the first bubble quickly after continuing
+      setTimeout(() => {
+        spawnBubble();
+      }, 500); // Small delay to ensure game state is properly set
+
+      // Don't reset score, combo, difficulty - just clear bubbles and continue
+      inputRef.current?.focus();
+
+    } catch (error) {
+      // Error processing payment fallback
+      // Still continue the game even if database save fails
+      setLives(1);
+      setShowAdModal(false);
+      setIsNewGame(false);
+      setGameState('playing');
+
+      // Clear existing bubbles and particles - start fresh bubbles from top
+      setBubbles([]);
+      setParticles([]);
+
+      // Clear processed bubbles tracking to start fresh
+      processedBubblesRef.current.clear();
+
+      // Reset used words for fresh word pool after payment
+      setUsedWords(new Set());
+
+      // Spawn the first bubble quickly after continuing
+      setTimeout(() => {
+        spawnBubble();
+      }, 500); // Small delay to ensure game state is properly set
+
+      inputRef.current?.focus();
+    }
+  };
 
 
   const saveCurrentScore = async () => {
-    if (score > 0 && user?.username) {
+    if (score > 0 && user?.id) {
       try {
         await saveGameScore({
-          user_id: user.username,
+          user_id: user.id,
           score: score,
           combo: maxCombo
         });
@@ -637,9 +737,9 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   const handleBackToMenu = async () => {
     // Save score before going back to menu
     await saveCurrentScore();
-    
+
     // No heart system - no database updates needed
-    
+
     if (onBackToMenu) {
       onBackToMenu();
     }
@@ -649,7 +749,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
     try {
       // Save current score
       await saveCurrentScore();
-      
+
       // Game ended - no heart system needed
 
       // Update high score if needed
@@ -659,7 +759,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
       }
 
       setShowAdModal(false);
-      
+
       // Go back to main menu
       if (onBackToMenu) {
         onBackToMenu();
@@ -776,17 +876,17 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
                       <div key={index} className={cn(
                         "flex justify-between items-center rounded-xl p-3 sm:p-4 shadow-lg transition-all duration-200",
                         index === 0 ? 'bg-gradient-to-r from-amber-500/30 to-orange-500/30 border border-amber-500/40 shadow-amber-500/20' :
-                        index === 1 ? 'bg-gradient-to-r from-slate-600/30 to-slate-700/30 border border-slate-500/40' :
-                        index === 2 ? 'bg-gradient-to-r from-orange-600/30 to-orange-700/30 border border-orange-500/40 shadow-orange-500/20' :
-                        'bg-slate-600/20 border border-slate-500/30'
+                          index === 1 ? 'bg-gradient-to-r from-slate-600/30 to-slate-700/30 border border-slate-500/40' :
+                            index === 2 ? 'bg-gradient-to-r from-orange-600/30 to-orange-700/30 border border-orange-500/40 shadow-orange-500/20' :
+                              'bg-slate-600/20 border border-slate-500/30'
                       )}>
                         <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
                           <span className={cn(
                             "font-black text-base sm:text-lg md:text-xl w-6 sm:w-8 md:w-10 text-center",
                             index === 0 ? 'text-amber-300' :
-                            index === 1 ? 'text-slate-300' :
-                            index === 2 ? 'text-orange-300' :
-                            'text-slate-400'
+                              index === 1 ? 'text-slate-300' :
+                                index === 2 ? 'text-orange-300' :
+                                  'text-slate-400'
                           )}>
                             #{index + 1}
                           </span>
@@ -833,79 +933,16 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
 
   if (showAdModal) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
-        {/* Mobile Game Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-60 h-60 bg-gradient-to-br from-primary/10 to-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-emerald-500/8 to-primary/5 rounded-full blur-3xl" />
-      </div>
-
-        {/* Mobile Game Container */}
-        <div className="relative z-10 flex flex-col max-w-md mx-auto px-4 py-6 min-h-screen justify-center">
-          
-          {/* Game Over Header */}
-          <div className="text-center mb-8">
-            <div className="text-8xl mb-4 drop-shadow-lg">💥</div>
-            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-orange-500 to-red-500 mb-2 drop-shadow-lg">
-              GAME OVER
-            </h1>
-            <p className="text-slate-300 text-lg font-semibold">No lives remaining</p>
-          </div>
-
-          {/* Score Display */}
-          <div className="bg-slate-800/40 backdrop-blur-xl rounded-2xl p-6 border border-slate-700/50 shadow-2xl mb-6">
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <Star className="text-amber-300 w-5 h-5" />
-                <p className="text-slate-300 font-bold text-sm uppercase tracking-wider">Final Score</p>
-                <Star className="text-amber-300 w-5 h-5" />
-              </div>
-              <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-emerald-400 to-primary mb-4 drop-shadow-lg">
-                {score}
-              </p>
-              {maxCombo > 5 && (
-                <div className="bg-gradient-to-r from-orange-500/30 to-amber-500/30 rounded-xl p-3 border border-orange-500/40 shadow-lg">
-                  <p className="text-orange-300 font-black text-lg flex items-center justify-center gap-2">
-                    🔥 MAX COMBO: {maxCombo}x
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="space-y-4 mb-6">
-            <Button
-              onClick={purchaseHearts}
-              size="lg"
-              className="w-full text-lg font-black h-14 bg-gradient-to-r from-primary to-emerald-500 text-white rounded-2xl shadow-2xl shadow-primary/25 transition-all duration-300 transform hover:scale-105"
-            >
-              <span className="mr-2">💳</span>
-              PAY $1 TO CONTINUE
-              <span className="ml-2">💳</span>
-            </Button>
-
-            <Button
-              onClick={goBackToMenu}
-              variant="outline"
-              size="lg"
-              className="w-full text-base font-bold h-12 border-slate-600/50 text-slate-300 hover:bg-slate-700/50 hover:text-white rounded-2xl transition-all duration-200"
-            >
-              BACK TO MAIN MENU
-            </Button>
-          </div>
-
-          {/* Continue Info */}
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
-              <span className="text-emerald-400">💰</span>
-              <p className="font-semibold">Pay $1 to continue from where you left off</p>
-              <span className="text-emerald-400">💰</span>
-            </div>
-          </div>
-
-        </div>
-
+      <>
+        <GameOverPurchaseScreen
+          onClose={goBackToMenu}
+          currentScore={score}
+          bestScore={highScore}
+          onPurchaseSuccess={() => {
+            // Trigger immediate refresh to check for hearts
+            loadUserData(true);
+          }}
+        />
         {/* Toast Notifications */}
         <ToastContainer>
           {toasts.map((toast) => (
@@ -918,7 +955,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
             />
           ))}
         </ToastContainer>
-      </div>
+      </>
     );
   }
 
@@ -955,6 +992,20 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           -webkit-tap-highlight-color: transparent;
           touch-action: manipulation;
         }
+        
+        /* Hexagon shape */
+        .hexagon-shape {
+          clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%);
+        }
+        
+        /* Shimmer animation for realistic bubble effect */
+        @keyframes shimmer {
+          0% { transform: translateX(-100%) skewX(-15deg); }
+          100% { transform: translateX(200%) skewX(-15deg); }
+        }
+        .animate-shimmer {
+          animation: shimmer 3s infinite;
+        }
       `}</style>
 
       {/* Simplified background */}
@@ -981,9 +1032,9 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
               )}
               <div className={cn(
                 "text-white px-3 py-2 rounded-lg font-black text-lg sm:text-xl shadow-lg transition-all duration-300",
-                score > highScore 
-                  ? "bg-gradient-to-r from-yellow-400 to-orange-500 animate-pulse shadow-yellow-500/50" 
-                  : "bg-gradient-to-r from-primary to-emerald-500"
+                score > highScore
+                  ? "bg-gradient-to-r from-yellow-400 to-orange-500 animate-pulse shadow-yellow-500/50"
+                  : "bg-gradient-to-r from-primary via-accent to-primary"
               )}>
                 {score}
                 {score > highScore && (
@@ -997,19 +1048,22 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {onBackToMenu && (
-                <button
-                  onClick={handleBackToMenu}
-                  className="w-8 h-8 bg-slate-800/50 backdrop-blur-sm rounded-full flex items-center justify-center border border-slate-600/50 hover:bg-slate-700/50 transition-all duration-200"
-                >
-                  <img 
-                    src="/icon/icon.png" 
-                    alt="Menu" 
-                    className="w-4 h-4"
-                  />
-                </button>
-              )}
+            <div className="flex items-center gap-2">
+              {/* Extra Lives Display */}
+              <div className="flex items-center gap-1 bg-gradient-to-r from-primary/20 to-accent/20 backdrop-blur-sm rounded-full px-2 py-1 border border-primary/30">
+                <Heart className="w-3 h-3 text-primary fill-primary" />
+                <span className="text-white font-bold text-sm">{lives} Extra</span>
+              </div>
+              
+              {/* Settings Button */}
+              <button
+                onClick={() => setShowSettings(true)}
+                className="w-8 h-8 bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-sm rounded-xl flex items-center justify-center border border-primary/20 hover:border-primary/40 hover:bg-gradient-to-br hover:from-primary/20 hover:to-accent/20 transition-all duration-200 shadow-lg shadow-primary/10"
+                title="Customize Objects"
+              >
+                <Settings className="w-4 h-4 text-white" />
+              </button>
+              
             </div>
           </div>
         </div>
@@ -1039,7 +1093,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           const textLength = bubble.word.length;
           let bubbleSize = 'w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24'; // Default size
           let textSize = 'text-xs sm:text-sm md:text-base'; // Default text size
-          
+
           if (textLength <= 3) {
             bubbleSize = 'w-14 h-14 sm:w-16 sm:h-16 md:w-18 md:h-18';
             textSize = 'text-xs sm:text-sm md:text-sm';
@@ -1053,32 +1107,62 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
             bubbleSize = 'w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32';
             textSize = 'text-xs sm:text-sm md:text-sm';
           }
+
+          // Determine shape class based on bubbleType
+          const shapeClass = bubbleType === 'circle' ? 'rounded-full' :
+                            bubbleType === 'square' ? 'rounded-xl' :
+                            bubbleType === 'hexagon' ? 'hexagon-shape' : 'rounded-full';
           
           return (
-          <div
-            key={bubble.id}
-            className="absolute"
-            style={{
-              left: `${bubble.x}%`,
-              top: `${bubble.y}%`,
-              transform: `translate(-50%, -50%) scale(${bubble.scale}) rotate(${bubble.rotation}deg)`
-            }}
-          >
-            <div className="relative">
+            <div
+              key={bubble.id}
+              className="absolute"
+              style={{
+                left: `${bubble.x}%`,
+                top: `${bubble.y}%`,
+                transform: `translate(-50%, -50%) scale(${bubble.scale}) rotate(${bubble.rotation}deg)`
+              }}
+            >
+              <div className="relative">
                 {/* Dynamic bubble size based on text length */}
-                <div className={`relative ${bubbleSize} rounded-full`}>
-                {/* Main bubble body - simplified */}
-                <div className="relative w-full h-full bg-gradient-to-br from-primary to-emerald-500 rounded-full shadow-md border border-white/20">
-                  {/* Text */}
-                    <div className="absolute inset-0 flex items-center justify-center px-1">
-                      <span className={`${textSize} font-black text-white text-center leading-tight break-words`}>
-                        {bubble.word}
-                      </span>
+                <div className={`relative ${bubbleSize} ${shapeClass}`}>
+                  {/* Main bubble body - realistic bubble effect */}
+                  <div className={`relative w-full h-full ${shapeClass} overflow-hidden`}>
+                    {/* Outer glow */}
+                    <div className={`absolute inset-0 bg-gradient-to-br from-primary/60 via-accent/50 to-primary/60 ${shapeClass} blur-md opacity-60`}></div>
+                    
+                    {/* Main bubble gradient - realistic soap bubble effect */}
+                    <div className={`relative w-full h-full bg-gradient-to-br from-primary via-accent to-primary ${shapeClass} shadow-2xl shadow-primary/50 border-2 border-white/40`}>
+                      {/* Inner highlight - realistic bubble shine */}
+                      <div className="absolute top-0 left-0 w-1/2 h-1/2 bg-gradient-to-br from-white/40 via-white/20 to-transparent rounded-full blur-sm"></div>
+                      
+                      {/* Secondary highlight */}
+                      <div className="absolute top-1/4 left-1/4 w-1/3 h-1/3 bg-white/30 rounded-full blur-xs"></div>
+                      
+                      {/* Bottom shadow for depth */}
+                      <div className={`absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/20 to-transparent ${shapeClass}`}></div>
+                      
+                      {/* Reflective edge */}
+                      <div className={`absolute inset-0 border-2 border-white/30 ${shapeClass}`} style={{
+                        background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3) 0%, transparent 50%)'
+                      }}></div>
+                      
+                      {/* Text with better contrast */}
+                      <div className="absolute inset-0 flex items-center justify-center px-1 z-20">
+                        <span className={`${textSize} font-black text-white text-center leading-tight break-words drop-shadow-2xl`} style={{
+                          textShadow: '0 2px 8px rgba(0,0,0,0.8), 0 0 4px rgba(168,85,247,0.5)'
+                        }}>
+                          {bubble.word}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Animated shimmer effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer opacity-0 hover:opacity-100 transition-opacity"></div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
           );
         })}
       </div>
@@ -1105,6 +1189,60 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
         </div>
       </div>
 
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-slate-800/95 via-slate-900/95 to-slate-800/95 backdrop-blur-xl rounded-2xl border border-primary/30 shadow-2xl shadow-primary/20 max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">
+                Customize Objects
+              </h3>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="w-8 h-8 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-slate-300 text-sm mb-4">Choose your object style:</p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {(['bubble', 'circle', 'square', 'hexagon'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => {
+                      setBubbleType(type);
+                      setShowSettings(false);
+                    }}
+                    className={cn(
+                      "p-4 rounded-xl border-2 transition-all duration-200",
+                      bubbleType === type
+                        ? "border-primary bg-gradient-to-br from-primary/20 to-accent/20 shadow-lg shadow-primary/30"
+                        : "border-slate-600/50 bg-slate-700/30 hover:border-primary/50 hover:bg-slate-700/50"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-12 h-12 mx-auto mb-2 flex items-center justify-center",
+                      type === 'bubble' || type === 'circle' ? 'rounded-full' :
+                      type === 'square' ? 'rounded-xl' : 'hexagon-shape'
+                    )}>
+                      <div className={cn(
+                        "w-full h-full bg-gradient-to-br from-primary to-accent",
+                        type === 'bubble' || type === 'circle' ? 'rounded-full' :
+                        type === 'square' ? 'rounded-xl' : 'hexagon-shape'
+                      )}></div>
+                    </div>
+                    <p className="text-white font-bold text-sm capitalize">{type}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast Notifications */}
       <ToastContainer>
         {toasts.map((toast) => (
@@ -1117,6 +1255,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           />
         ))}
       </ToastContainer>
+      
     </div>
   );
 };

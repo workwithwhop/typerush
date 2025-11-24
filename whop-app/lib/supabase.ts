@@ -49,6 +49,7 @@ export interface LeaderboardEntry {
   score: number
   combo: number
   date: string
+  id?: string // Optional user ID for matching
 }
 
 export interface TopSpender {
