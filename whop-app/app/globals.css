@@ -8,7 +8,29 @@
 @config '../tailwind.config.ts';
 
 @layer base {
-  :root {
+	:root {
+		--background: 0 0% 100%;
+		--foreground: 222.2 84% 4.9%;
+		--card: 0 0% 100%;
+		--card-foreground: 222.2 84% 4.9%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 222.2 84% 4.9%;
+		--primary: 280 85% 62%;  /* ✅ Change to purple like dark theme */
+		--primary-foreground: 0 0% 100%;  /* ✅ Change to white */
+		--secondary: 210 40% 98%;
+		--secondary-foreground: 222.2 84% 4.9%;
+		--muted: 210 40% 98%;
+		--muted-foreground: 215.4 16.3% 46.9%;
+		--accent: 290 90% 68%;  /* ✅ Change to magenta like dark theme */
+		--accent-foreground: 0 0% 100%;  /* ✅ Change to white */
+		--destructive: 0 84.2% 60.2%;
+		--destructive-foreground: 210 40% 98%;
+		--border: 214.3 31.8% 91.4%;
+		--input: 214.3 31.8% 91.4%;
+		--ring: 280 85% 62%;  /* ✅ Change to purple */
+		--radius: 0.5rem;
+	 }
+  /* :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -29,7 +51,7 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 142.1 76.2% 36.3%;
     --radius: 0.5rem;
-  }
+  } */
 
   .dark {
     /* Premium Dark Theme with Stunning Purple-Pink Gradient */
