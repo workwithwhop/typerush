@@ -197,11 +197,23 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   const [showSettings, setShowSettings] = useState(false);
   // No heart system - removed pendingHeartUpdate state
   const inputRef = useRef<HTMLInputElement>(null);
-  const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
+  const gameLoopRef = useRef<number | null>(null); // Changed to number for requestAnimationFrame
   const bubbleIdRef = useRef(0);
   const particleIdRef = useRef(0);
   const processedBubblesRef = useRef<Set<number>>(new Set());
   const realtimeChannelsRef = useRef<any[]>([]);
+  
+  // Mobile detection hook for performance optimizations
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobile(mobile);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Debug user object on component mount
   useEffect(() => {
@@ -444,7 +456,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
         word,
         x: Math.random() * 80 + 10, // Better mobile positioning
         y: -5,
-        speed: 0.25 + (difficulty * 0.08),
+        speed: 0.15 + (difficulty * 0.04), // Reduced speed: slower base speed (0.15 vs 0.25) and slower increase per difficulty (0.04 vs 0.08)
         scale: 1,
         rotation: 0, // No rotation - bubbles appear at 0 degrees
       };
@@ -461,7 +473,7 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
         word,
         x: Math.random() * 80 + 10, // Better mobile positioning
         y: -5,
-        speed: 0.25 + (difficulty * 0.08),
+        speed: 0.15 + (difficulty * 0.04), // Reduced speed: slower base speed (0.15 vs 0.25) and slower increase per difficulty (0.04 vs 0.08)
         scale: 1,
         rotation: 0, // No rotation - bubbles appear at 0 degrees
       };
@@ -470,10 +482,11 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
   };
 
   const createParticles = (x: number, y: number) => {
-    // Reduced particle count for better performance
+    // Reduced particle count for mobile - 4 on mobile, 8 on desktop for better performance
+    const particleCount = isMobile ? 4 : 8;
     // Use theme colors (primary/accent purple) instead of green
     const themeColors = ['#a855f7', '#c084fc', '#d8b4fe', '#e9d5ff']; // Purple gradient colors
-    const newParticles = Array.from({ length: 8 }, (_, i) => ({
+    const newParticles = Array.from({ length: particleCount }, (_, i) => ({
       id: particleIdRef.current++,
       x,
       y,
@@ -489,104 +502,130 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
     if (gameState !== 'playing') {
       // Clear processed bubble tracking on game stop
       processedBubblesRef.current.clear();
+      if (gameLoopRef.current) {
+        cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
       return;
     }
 
-    // Reduced frequency for better performance (60fps -> 30fps)
-    gameLoopRef.current = setInterval(() => {
-      setBubbles(prev => {
-        const updated = prev.map(bubble => ({
-          ...bubble,
-          y: bubble.y + bubble.speed,
-          rotation: 0 // Keep rotation at 0 degrees - no rotation
-        }));
+    // Use requestAnimationFrame for smoother, more efficient animations
+    // Better performance on mobile than setInterval
+    let lastTime = performance.now();
+    const targetFPS = isMobile ? 30 : 60; // Lower FPS on mobile for better battery life
+    const frameInterval = 1000 / targetFPS;
 
-        // Find bubbles that reached the bottom
-        const bubblesAtBottom = updated.filter(b => b.y > 88);
-        if (bubblesAtBottom.length > 0) {
-          // Found bubbles at bottom
+    const gameLoop = (currentTime: number) => {
+      const deltaTime = currentTime - lastTime;
 
-          // Process ONLY unprocessed bubbles - 100% perfect 1:1 ratio
-          const unprocessedBubbles = bubblesAtBottom.filter(b => !processedBubblesRef.current.has(b.id));
+      if (deltaTime >= frameInterval) {
+        lastTime = currentTime - (deltaTime % frameInterval);
 
-          if (unprocessedBubbles.length > 0) {
-            const bubbleToProcess = unprocessedBubbles[0];
+        setBubbles(prev => {
+          const updated = prev.map(bubble => ({
+            ...bubble,
+            y: bubble.y + bubble.speed,
+            rotation: 0 // Keep rotation at 0 degrees - no rotation
+          }));
 
-            // Mark this bubble as processed immediately to prevent double-processing
-            processedBubblesRef.current.add(bubbleToProcess.id);
+          // Find bubbles that reached the bottom
+          const bubblesAtBottom = updated.filter(b => b.y > 88);
+          if (bubblesAtBottom.length > 0) {
+            // Found bubbles at bottom
 
-            // Check if user has extra lives
-            if (livesRef.current > 0) {
-              // User has extra lives - reduce by 1
-              const newLives = livesRef.current - 1;
-              livesRef.current = newLives;
-              setLives(newLives);
+            // Process ONLY unprocessed bubbles - 100% perfect 1:1 ratio
+            const unprocessedBubbles = bubblesAtBottom.filter(b => !processedBubblesRef.current.has(b.id));
 
-              // Update database in real-time
-              if (user?.id) {
-                updateUserLives(user.id, newLives).catch(error => {
-                  console.error('Error updating lives in database:', error);
-                });
+            if (unprocessedBubbles.length > 0) {
+              const bubbleToProcess = unprocessedBubbles[0];
+
+              // Mark this bubble as processed immediately to prevent double-processing
+              processedBubblesRef.current.add(bubbleToProcess.id);
+
+              // Check if user has extra lives
+              if (livesRef.current > 0) {
+                // User has extra lives - reduce by 1
+                const newLives = livesRef.current - 1;
+                livesRef.current = newLives;
+                setLives(newLives);
+
+                // Update database in real-time
+                if (user?.id) {
+                  updateUserLives(user.id, newLives).catch(error => {
+                    console.error('Error updating lives in database:', error);
+                  });
+                }
+
+                // Remove only the bubble that touched bottom and continue game
+                return updated.filter(b => b.id !== bubbleToProcess.id);
+              } else {
+                // No extra lives - game over
+                // Save score when game ends
+                saveCurrentScore();
+
+                // Set game over state
+                setGameState('gameover');
+                setShowAdModal(true);
+
+                // Stop the game loop
+                if (gameLoopRef.current) {
+                  cancelAnimationFrame(gameLoopRef.current);
+                  gameLoopRef.current = null;
+                }
+
+                setCombo(0);
+                setUsedWords(new Set()); // Reset used words for next game
+
+                // Game is over - return empty array to clear all bubbles
+                return [];
               }
-
-              // Remove only the bubble that touched bottom and continue game
-              return updated.filter(b => b.id !== bubbleToProcess.id);
-            } else {
-              // No extra lives - game over
-              // Save score when game ends
-              saveCurrentScore();
-
-              // Set game over state
-              setGameState('gameover');
-              setShowAdModal(true);
-
-              // Stop the game loop
-              if (gameLoopRef.current) {
-                clearInterval(gameLoopRef.current);
-                gameLoopRef.current = null;
-              }
-
-              setCombo(0);
-              setUsedWords(new Set()); // Reset used words for next game
-
-              // Game is over - return empty array to clear all bubbles
-              return [];
             }
           }
+
+          return updated;
+        });
+
+        setParticles(prev =>
+          prev
+            .map(p => ({
+              ...p,
+              x: p.x + p.vx,
+              y: p.y + p.vy,
+              vy: p.vy + 0.3,
+              life: p.life - 0.02
+            }))
+            .filter(p => p.life > 0)
+        );
+
+        // Reduced spawn rate: slower initial spawn (0.008 vs 0.015) and slower increase (0.002 vs 0.003)
+        // This gives players more time between bubbles
+        if (Math.random() < 0.008 + (difficulty * 0.002)) {
+          spawnBubble();
         }
-
-        return updated;
-      });
-
-      setParticles(prev =>
-        prev
-          .map(p => ({
-            ...p,
-            x: p.x + p.vx,
-            y: p.y + p.vy,
-            vy: p.vy + 0.3,
-            life: p.life - 0.02
-          }))
-          .filter(p => p.life > 0)
-      );
-
-      if (Math.random() < 0.015 + (difficulty * 0.003)) {
-        spawnBubble();
       }
-    }, 33); // ~30fps for better performance
+
+      if (gameState === 'playing') {
+        gameLoopRef.current = requestAnimationFrame(gameLoop);
+      }
+    };
+
+    gameLoopRef.current = requestAnimationFrame(gameLoop);
 
     return () => {
       if (gameLoopRef.current) {
-        clearInterval(gameLoopRef.current);
+        cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = null;
       }
     };
-  }, [gameState, difficulty]);
+  }, [gameState, difficulty, isMobile, user?.id]);
 
   useEffect(() => {
     if (gameState !== 'playing') return;
+    // Difficulty increases slower: every 20 seconds (vs 15) and by 0.3 (vs 0.5)
+    // This gives players more time to adapt before difficulty increases
     const difficultyTimer = setInterval(() => {
-      setDifficulty(d => Math.min(d + 0.5, 10));
-    }, 15000);
+      setDifficulty(d => Math.min(d + 0.3, 10));
+    }, 20000);
     return () => clearInterval(difficultyTimer);
   }, [gameState]);
 
@@ -979,6 +1018,19 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           .input-box {
             padding: 0.75rem !important;
           }
+          
+          /* Simplify bubbles on mobile - remove expensive effects */
+          .bubble-glow {
+            display: none !important;
+          }
+          
+          .bubble-shimmer {
+            display: none !important;
+          }
+          
+          .bubble-inner-highlight {
+            opacity: 0.5 !important;
+          }
         }
         
         /* Prevent text selection on mobile */
@@ -995,12 +1047,22 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           touch-action: manipulation;
         }
         
+        /* Hardware acceleration for bubbles and particles */
+        .bubble-container, .particle-container {
+          will-change: transform;
+          transform: translateZ(0);
+          -webkit-transform: translateZ(0);
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+          contain: layout style paint;
+        }
+        
         /* Hexagon shape */
         .hexagon-shape {
           clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%);
         }
         
-        /* Shimmer animation for realistic bubble effect */
+        /* Shimmer animation for realistic bubble effect - disabled on mobile */
         @keyframes shimmer {
           0% { transform: translateX(-100%) skewX(-15deg); }
           100% { transform: translateX(200%) skewX(-15deg); }
@@ -1008,12 +1070,34 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
         .animate-shimmer {
           animation: shimmer 3s infinite;
         }
+        
+        @media (max-width: 768px) {
+          .animate-shimmer {
+            animation: none !important;
+          }
+        }
+        
+        /* Optimize game area for mobile */
+        @media (max-width: 768px) {
+          #game-area {
+            contain: layout style paint;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            isolation: isolate; /* Create new stacking context for better performance */
+          }
+          
+          /* Reduce backdrop blur on mobile */
+          .backdrop-blur-xl {
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+          }
+        }
       `}</style>
 
-      {/* Simplified background */}
+      {/* Simplified background - reduced blur on mobile for performance */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-60 h-60 bg-gradient-to-br from-primary/8 to-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-accent/10 to-primary/5 rounded-full blur-3xl" />
+        <div className={`absolute top-20 left-10 w-60 h-60 bg-gradient-to-br from-primary/8 to-primary/5 rounded-full ${isMobile ? 'blur-xl' : 'blur-3xl'}`} />
+        <div className={`absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-accent/10 to-primary/5 rounded-full ${isMobile ? 'blur-xl' : 'blur-3xl'}`} />
       </div>
 
       {/* Mobile-Optimized Game Header */}
@@ -1072,19 +1156,19 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
       </div>
 
       {/* Game Area */}
-      <div className="w-full h-screen pt-20 sm:pt-24 pb-20 sm:pb-24 relative">
+      <div id="game-area" className="w-full h-screen pt-20 sm:pt-24 pb-20 sm:pb-24 relative">
         {/* Particles */}
         {particles.map(particle => (
           <div
             key={particle.id}
-            className="absolute w-1.5 h-1.5 sm:w-2 sm:h-2 md:w-3 md:h-3 rounded-full pointer-events-none"
+            className="particle-container absolute w-1.5 h-1.5 sm:w-2 sm:h-2 md:w-3 md:h-3 rounded-full pointer-events-none"
             style={{
               left: `${particle.x}%`,
               top: `${particle.y}%`,
               backgroundColor: particle.color,
               opacity: particle.life,
-              transform: `scale(${particle.life})`,
-              boxShadow: `0 0 8px ${particle.color}`
+              transform: `translateZ(0) scale(${particle.life})`,
+              boxShadow: isMobile ? 'none' : `0 0 8px ${particle.color}` // Remove shadow on mobile for performance
             }}
           />
         ))}
@@ -1118,49 +1202,53 @@ const BubbleTypeGame = ({ user, onBackToMenu }: BubbleTypeGameProps) => {
           return (
             <div
               key={bubble.id}
-              className="absolute"
+              className="bubble-container absolute"
               style={{
                 left: `${bubble.x}%`,
                 top: `${bubble.y}%`,
-                transform: `translate(-50%, -50%) scale(${bubble.scale}) rotate(${bubble.rotation}deg)`
+                transform: `translateZ(0) translate(-50%, -50%) scale(${bubble.scale}) rotate(${bubble.rotation}deg)`
               }}
             >
               <div className="relative">
                 {/* Dynamic bubble size based on text length */}
                 <div className={`relative ${bubbleSize} ${shapeClass}`}>
-                  {/* Main bubble body - realistic bubble effect */}
+                  {/* Main bubble body - simplified on mobile for performance */}
                   <div className={`relative w-full h-full ${shapeClass} overflow-hidden`}>
-                    {/* Outer glow */}
-                    <div className={`absolute inset-0 bg-gradient-to-br from-primary/60 via-accent/50 to-primary/60 ${shapeClass} blur-md opacity-60`}></div>
+                    {/* Outer glow - hidden on mobile */}
+                    {!isMobile && (
+                      <div className={`bubble-glow absolute inset-0 bg-gradient-to-br from-primary/60 via-accent/50 to-primary/60 ${shapeClass} blur-md opacity-60`}></div>
+                    )}
                     
-                    {/* Main bubble gradient - realistic soap bubble effect */}
-                    <div className={`relative w-full h-full bg-gradient-to-br from-primary via-accent to-primary ${shapeClass} shadow-2xl shadow-primary/50 border-2 border-white/40`}>
-                      {/* Inner highlight - realistic bubble shine */}
-                      <div className="absolute top-0 left-0 w-1/2 h-1/2 bg-gradient-to-br from-white/40 via-white/20 to-transparent rounded-full blur-sm"></div>
-                      
-                      {/* Secondary highlight */}
-                      <div className="absolute top-1/4 left-1/4 w-1/3 h-1/3 bg-white/30 rounded-full blur-xs"></div>
-                      
-                      {/* Bottom shadow for depth */}
-                      <div className={`absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/20 to-transparent ${shapeClass}`}></div>
-                      
-                      {/* Reflective edge */}
-                      <div className={`absolute inset-0 border-2 border-white/30 ${shapeClass}`} style={{
-                        background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3) 0%, transparent 50%)'
-                      }}></div>
+                    {/* Main bubble gradient - simplified shadow on mobile */}
+                    <div className={`relative w-full h-full bg-gradient-to-br from-primary via-accent to-primary ${shapeClass} ${isMobile ? 'border border-white/30' : 'shadow-2xl shadow-primary/50 border-2 border-white/40'}`}>
+                      {/* Inner highlight - simplified on mobile */}
+                      {!isMobile ? (
+                        <>
+                          <div className="absolute top-0 left-0 w-1/2 h-1/2 bg-gradient-to-br from-white/40 via-white/20 to-transparent rounded-full blur-sm bubble-inner-highlight"></div>
+                          <div className="absolute top-1/4 left-1/4 w-1/3 h-1/3 bg-white/30 rounded-full blur-xs"></div>
+                          <div className={`absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/20 to-transparent ${shapeClass}`}></div>
+                          <div className={`absolute inset-0 border-2 border-white/30 ${shapeClass}`} style={{
+                            background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3) 0%, transparent 50%)'
+                          }}></div>
+                        </>
+                      ) : (
+                        <div className="absolute top-0 left-0 w-1/2 h-1/2 bg-white/20 rounded-full bubble-inner-highlight"></div>
+                      )}
                       
                       {/* Text with better contrast */}
                       <div className="absolute inset-0 flex items-center justify-center px-1 z-20">
-                        <span className={`${textSize} font-black text-white text-center leading-tight break-words drop-shadow-2xl`} style={{
-                          textShadow: '0 2px 8px rgba(0,0,0,0.8), 0 0 4px rgba(168,85,247,0.5)'
+                        <span className={`${textSize} font-black text-white text-center leading-tight break-words ${isMobile ? '' : 'drop-shadow-2xl'}`} style={{
+                          textShadow: isMobile ? '0 1px 3px rgba(0,0,0,0.8)' : '0 2px 8px rgba(0,0,0,0.8), 0 0 4px rgba(168,85,247,0.5)'
                         }}>
                           {bubble.word}
                         </span>
                       </div>
                     </div>
                     
-                    {/* Animated shimmer effect */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer opacity-0 hover:opacity-100 transition-opacity"></div>
+                    {/* Animated shimmer effect - disabled on mobile */}
+                    {!isMobile && (
+                      <div className="bubble-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer opacity-0 hover:opacity-100 transition-opacity"></div>
+                    )}
                   </div>
                 </div>
               </div>
